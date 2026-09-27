@@ -331,45 +331,6 @@ def obtener_procedimiento(estado):
     return equivalencias.get(codigo, codigo)
 
 
-def obtener_fecha_limite(estado):
-    proceso = buscar_primero(
-        estado,
-        "TenderingProcess",
-    )
-
-    if proceso is None:
-        return ""
-
-    periodo = buscar_primero(
-        proceso,
-        "TenderSubmissionDeadlinePeriod",
-    )
-
-    if periodo is None:
-        periodo = buscar_primero(
-            proceso,
-            "ParticipationRequestReceptionPeriod",
-        )
-
-    if periodo is None:
-        return ""
-
-    fecha = texto_primero(
-        periodo,
-        "EndDate",
-    )
-
-    hora = texto_primero(
-        periodo,
-        "EndTime",
-    )
-
-    if fecha and hora:
-        return f"{fecha} {hora}"
-
-    return fecha
-
-
 def obtener_adjudicatarios(estado):
     adjudicatarios = []
 
@@ -491,7 +452,10 @@ def obtener_importes_adjudicacion(estado):
         if con_iva > 0:
             importes_con_iva.append(con_iva)
 
-    return sum(importes_sin_iva), sum(importes_con_iva)
+    return (
+        sum(importes_sin_iva),
+        sum(importes_con_iva),
+    )
 
 
 def extraer_licitacion(entry, fuente):
@@ -508,7 +472,7 @@ def extraer_licitacion(entry, fuente):
         "ContractFolderStatusCode",
     ).upper()
 
-    # Únicamente expedientes adjudicados.
+    # Solo expedientes adjudicados.
     if estado_codigo != "ADJ":
         return None
 
@@ -569,7 +533,7 @@ def extraer_licitacion(entry, fuente):
         importe_filtro = presupuesto_sin_iva
         criterio_importe = "Presupuesto base sin IVA"
 
-    # Solo importes superiores a 500.000 euros.
+    # Solo importes estrictamente superiores a 500.000 euros.
     if importe_filtro <= IMPORTE_MINIMO:
         return None
 
@@ -618,10 +582,15 @@ def extraer_licitacion(entry, fuente):
     organo = obtener_nombre_organo(estado)
     tipo_contrato = obtener_tipo_contrato(proyecto)
     procedimiento = obtener_procedimiento(estado)
-    fecha_limite = obtener_fecha_limite(estado)
     cpv = obtener_cpv(proyecto)
 
     adjudicatarios = obtener_adjudicatarios(estado)
+
+    if adjudicatarios:
+        texto_adjudicatarios = ", ".join(adjudicatarios)
+    else:
+        texto_adjudicatarios = "Adjudicatario no informado"
+
     fecha_adjudicacion = obtener_fecha_adjudicacion(estado)
 
     (
@@ -661,6 +630,8 @@ def extraer_licitacion(entry, fuente):
 
     descripcion = (
         f"<p><strong>Estado:</strong> ADJUDICADA</p>"
+        f"<p><strong>Adjudicatario:</strong> "
+        f"{html.escape(texto_adjudicatarios)}</p>"
         f"<p><strong>Expediente:</strong> "
         f"{html.escape(expediente)}</p>"
         f"<p><strong>Objeto:</strong> "
@@ -707,12 +678,6 @@ def extraer_licitacion(entry, fuente):
             f"{html.escape(fecha_adjudicacion)}</p>"
         )
 
-    if adjudicatarios:
-        descripcion += (
-            f"<p><strong>Adjudicatario:</strong> "
-            f"{html.escape(', '.join(adjudicatarios))}</p>"
-        )
-
     if tipo_contrato:
         descripcion += (
             f"<p><strong>Tipo de contrato:</strong> "
@@ -744,14 +709,17 @@ def extraer_licitacion(entry, fuente):
         f"Consultar la adjudicación oficial</a></p>"
     )
 
+    # Orden del título solicitado:
+    # ADJUDICADA | ADJUDICATARIO | IMPORTE | OBJETO
     titulo = (
         f"ADJUDICADA | "
+        f"{texto_adjudicatarios} | "
         f"{formatear_importe(importe_filtro)} | "
         f"{objeto}"
     )
 
-    if len(titulo) > 300:
-        titulo = titulo[:297] + "..."
+    if len(titulo) > 400:
+        titulo = titulo[:397] + "..."
 
     return {
         "id": guid,
@@ -767,11 +735,11 @@ def extraer_licitacion(entry, fuente):
         "adjudicacion_sin_iva": adjudicacion_sin_iva,
         "adjudicacion_con_iva": adjudicacion_con_iva,
         "adjudicatarios": adjudicatarios,
+        "texto_adjudicatarios": texto_adjudicatarios,
         "fecha_adjudicacion": fecha_adjudicacion,
         "tipo_contrato": tipo_contrato,
         "procedimiento": procedimiento,
         "estado": "ADJ",
-        "fecha_limite": fecha_limite,
         "cpv": cpv,
         "lugar": provincia,
         "fuente": fuente,
@@ -807,6 +775,7 @@ def descargar_fuente(sesion, fuente):
 
         try:
             raiz = ET.fromstring(contenido)
+
         except ET.ParseError as error:
             raise RuntimeError(
                 f'XML incorrecto en {fuente["nombre"]}: {error}'
@@ -876,6 +845,49 @@ def cargar_estado():
     return []
 
 
+def reconstruir_titulo(licitacion):
+    adjudicatarios = licitacion.get(
+        "adjudicatarios",
+        [],
+    )
+
+    if adjudicatarios:
+        texto_adjudicatarios = ", ".join(adjudicatarios)
+    else:
+        texto_adjudicatarios = licitacion.get(
+            "texto_adjudicatarios",
+            "Adjudicatario no informado",
+        )
+
+    importe = float(
+        licitacion.get(
+            "importe_filtro",
+            0,
+        )
+        or 0
+    )
+
+    objeto = licitacion.get(
+        "objeto",
+        "Objeto no informado",
+    )
+
+    titulo = (
+        f"ADJUDICADA | "
+        f"{texto_adjudicatarios} | "
+        f"{formatear_importe(importe)} | "
+        f"{objeto}"
+    )
+
+    if len(titulo) > 400:
+        titulo = titulo[:397] + "..."
+
+    licitacion["titulo"] = titulo
+    licitacion["texto_adjudicatarios"] = texto_adjudicatarios
+
+    return licitacion
+
+
 def combinar_licitaciones(nuevas, anteriores):
     resultado = []
     identificadores = set()
@@ -889,14 +901,12 @@ def combinar_licitaciones(nuevas, anteriores):
     )
 
     for licitacion in nuevas + anteriores:
-        # Elimina del historial todo lo que no esté adjudicado.
         if licitacion.get(
             "estado",
             "",
         ).upper() != "ADJ":
             continue
 
-        # Mantiene solo expedientes superiores a 500.000 euros.
         importe = float(
             licitacion.get(
                 "importe_filtro",
@@ -917,6 +927,8 @@ def combinar_licitaciones(nuevas, anteriores):
             continue
 
         identificadores.add(identificador)
+
+        licitacion = reconstruir_titulo(licitacion)
         resultado.append(licitacion)
 
     resultado.sort(
