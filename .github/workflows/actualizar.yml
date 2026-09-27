@@ -1,16 +1,18 @@
-name: Actualizar RSS adjudicaciones España
+name: Actualizar adjudicaciones España
 
 on:
   workflow_dispatch:
 
   schedule:
-    - cron: "27 * * * 1-5"
+    # GitHub utiliza UTC. Se inicia cada hora y después
+    # se comprueba la hora real de España.
+    - cron: "11 * * * 1-6"
 
 permissions:
   contents: write
 
 concurrency:
-  group: actualizar-rss-adjudicaciones-espana
+  group: actualizar-adjudicaciones-espana
   cancel-in-progress: true
 
 jobs:
@@ -22,28 +24,26 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Comprobar horario español
+      - name: Comprobar horario de España
         id: horario
         shell: bash
         run: |
-          HORA=$(TZ=Europe/Madrid date +%H)
-          DIA=$(TZ=Europe/Madrid date +%u)
+          HORA="$(TZ=Europe/Madrid date +%H)"
+          MINUTO="$(TZ=Europe/Madrid date +%M)"
+          DIA="$(TZ=Europe/Madrid date +%u)"
 
-          echo "Hora española: $HORA"
-          echo "Día de la semana: $DIA"
+          echo "Hora española: ${HORA}:${MINUTO}"
+          echo "Día de la semana: ${DIA}"
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Ejecución manual permitida."
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "ejecutar=si" >> "$GITHUB_OUTPUT"
-          elif [ "$DIA" -le 5 ] && \
-               { [ "$HORA" = "07" ] || \
-                 [ "$HORA" = "12" ] || \
-                 [ "$HORA" = "17" ] || \
-                 [ "$HORA" = "22" ]; }; then
-            echo "Horario programado permitido."
+          elif [[ "${DIA}" -ge 1 && "${DIA}" -le 6 ]] && \
+               [[ "${HORA}" == "07" || \
+                  "${HORA}" == "12" || \
+                  "${HORA}" == "17" || \
+                  "${HORA}" == "22" ]]; then
             echo "ejecutar=si" >> "$GITHUB_OUTPUT"
           else
-            echo "Fuera del horario programado."
             echo "ejecutar=no" >> "$GITHUB_OUTPUT"
           fi
 
@@ -62,20 +62,43 @@ jobs:
 
       - name: Crear RSS
         if: steps.horario.outputs.ejecutar == 'si'
-        run: python -u actualizar_rss.py
+        run: python actualizar_rss.py
 
-      - name: Guardar RSS
+      - name: Comprobar RSS
+        if: steps.horario.outputs.ejecutar == 'si'
+        run: |
+          test -s feed.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          raiz = ET.parse("feed.xml").getroot()
+          entradas = raiz.findall("./channel/item")
+
+          print("RSS XML correcto.")
+          print(f"Entradas encontradas: {len(entradas)}")
+
+          if entradas:
+              print("Primer título:")
+              print(entradas[0].findtext("title"))
+          PY
+
+      - name: Guardar RSS actualizado
         if: steps.horario.outputs.ejecutar == 'si'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add feed.xml estado.json
+          git add feed.xml historial.json
 
           if git diff --cached --quiet; then
-            echo "No hay adjudicaciones nuevas."
+            echo "Proceso correcto: no hay adjudicaciones nuevas."
           else
-            git commit -m "Actualizar adjudicaciones España"
+            git commit -m "Actualizar adjudicaciones España con fecha"
             git push
           fi
+
+      - name: Fuera del horario
+        if: steps.horario.outputs.ejecutar != 'si'
+        run: |
+          echo "No corresponde ejecutar en esta hora."
