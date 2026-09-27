@@ -1,4 +1,4 @@
-name: Actualizar RSS adjudicaciones
+name: Actualizar RSS adjudicaciones España
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: actualizar-rss-adjudicaciones
+  group: actualizar-rss-adjudicaciones-espana
   cancel-in-progress: true
 
 jobs:
@@ -76,6 +76,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No hay adjudicaciones nuevas."
           else
-            git commit -m "Actualizar adjudicaciones superiores a 500000 euros"
+            git commit -m "Actualizar adjudicaciones España"
             git push
           fi
