@@ -3,936 +3,770 @@ import html
 import json
 import re
 import sys
-import xml.etree.ElementTree as ET
-
+import time
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from pathlib import Path
 from urllib.parse import urljoin
+from xml.etree import ElementTree as ET
+from zoneinfo import ZoneInfo
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 
-FUENTES = [
-    {
-        "nombre": "Perfiles del contratante",
-        "url": (
-            "https://contrataciondelsectorpublico.gob.es/"
-            "sindicacion/sindicacion_643/"
-            "licitacionesPerfilesContratanteCompleto3.atom"
-        ),
-    },
-    {
-        "nombre": "Plataformas agregadas",
-        "url": (
-            "https://contrataciondelsectorpublico.gob.es/"
-            "sindicacion/sindicacion_1044/"
-            "PlataformasAgregadasSinMenores.atom"
-        ),
-    },
-]
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
 
-IMPORTE_MINIMO = 500000.00
-MAXIMO_PAGINAS_POR_FUENTE = 3
-MAXIMO_LICITACIONES = 1500
-
-VERSION_GUID = "v4-adjudicada-espana-adjudicatario"
-
-ARCHIVO_RSS = Path("feed.xml")
-ARCHIVO_ESTADO = Path("estado.json")
+USUARIO_GITHUB = "plis2100"
+REPOSITORIO_GITHUB = "rss-licitaciones-500000"
 
 URL_RSS = (
-    "https://raw.githubusercontent.com/"
-    "plis2100/rss-licitaciones-500000/main/feed.xml"
+    f"https://raw.githubusercontent.com/"
+    f"{USUARIO_GITHUB}/{REPOSITORIO_GITHUB}/main/feed.xml"
 )
 
+URL_PLACSP = (
+    "https://contrataciondelestado.es/sindicacion/"
+    "sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom"
+)
+
+ARCHIVO_RSS = Path("feed.xml")
+ARCHIVO_HISTORIAL = Path("historial.json")
+
+IMPORTE_MINIMO = 500_000.00
+
+MAXIMO_PAGINAS = 12
+MAXIMO_ENTRADAS_RSS = 500
+
+TIMEOUT_CONEXION = 15
+TIMEOUT_LECTURA = 50
+
+ZONA_HORARIA = ZoneInfo("Europe/Madrid")
+
+CABECERAS = {
+    "User-Agent": (
+        "Mozilla/5.0 (compatible; "
+        "RSS-Adjudicaciones-Espana/3.0; "
+        "+https://github.com/plis2100)"
+    ),
+    "Accept": (
+        "application/atom+xml,"
+        "application/xml;q=0.9,"
+        "text/xml;q=0.8,*/*;q=0.7"
+    ),
+}
+
+
+# ============================================================
+# FUNCIONES XML
+# ============================================================
 
 def nombre_local(elemento):
-    return elemento.tag.split("}")[-1].split(":")[-1]
-
-
-def limpiar_texto(texto):
-    if texto is None:
+    """Elimina el namespace del nombre de una etiqueta XML."""
+    if elemento is None:
         return ""
 
-    return re.sub(r"\s+", " ", str(texto)).strip()
+    return elemento.tag.split("}")[-1]
 
 
-def buscar_primero(elemento, nombre):
+def texto_elemento(elemento):
+    """Devuelve todo el texto contenido en un elemento."""
+    if elemento is None:
+        return ""
+
+    texto = " ".join(elemento.itertext())
+    return " ".join(texto.split()).strip()
+
+
+def buscar_descendiente(elemento, nombres):
+    """
+    Busca el primer descendiente cuyo nombre local coincida
+    con alguno de los nombres indicados.
+    """
     if elemento is None:
         return None
 
-    for candidato in elemento.iter():
-        if nombre_local(candidato) == nombre:
-            return candidato
+    if isinstance(nombres, str):
+        nombres = {nombres}
+    else:
+        nombres = set(nombres)
+
+    for descendiente in elemento.iter():
+        if nombre_local(descendiente) in nombres:
+            return descendiente
 
     return None
 
 
-def buscar_todos(elemento, nombre):
+def buscar_descendientes(elemento, nombres):
+    """Busca todos los descendientes con los nombres indicados."""
+    if elemento is None:
+        return []
+
+    if isinstance(nombres, str):
+        nombres = {nombres}
+    else:
+        nombres = set(nombres)
+
+    return [
+        descendiente
+        for descendiente in elemento.iter()
+        if nombre_local(descendiente) in nombres
+    ]
+
+
+def texto_descendiente(elemento, nombres):
+    return texto_elemento(buscar_descendiente(elemento, nombres))
+
+
+def hijos_directos(elemento, nombre):
     if elemento is None:
         return []
 
     return [
-        candidato
-        for candidato in elemento.iter()
-        if nombre_local(candidato) == nombre
+        hijo
+        for hijo in list(elemento)
+        if nombre_local(hijo) == nombre
     ]
 
 
-def texto_primero(elemento, nombre):
-    candidato = buscar_primero(elemento, nombre)
+# ============================================================
+# CONVERSIÓN DE DATOS
+# ============================================================
 
-    if candidato is None:
+def limpiar_texto(valor):
+    if valor is None:
         return ""
 
-    return limpiar_texto(candidato.text)
+    return " ".join(str(valor).split()).strip()
 
 
-def texto_hijo_directo(elemento, nombre):
-    if elemento is None:
-        return ""
+def convertir_importe(valor):
+    if valor is None:
+        return None
 
-    for hijo in list(elemento):
-        if nombre_local(hijo) == nombre:
-            return limpiar_texto(hijo.text)
+    if isinstance(valor, (int, float)):
+        return float(valor)
 
-    return ""
+    texto = limpiar_texto(valor)
 
-
-def convertir_importe(texto):
     if not texto:
-        return 0.0
+        return None
 
-    texto = limpiar_texto(texto)
-    texto = texto.replace("EUR", "")
-    texto = texto.replace("€", "")
-    texto = texto.replace(" ", "")
+    texto = (
+        texto.replace("\u00a0", "")
+        .replace("EUR", "")
+        .replace("€", "")
+        .replace(" ", "")
+    )
+
+    texto = re.sub(r"[^0-9,.\-]", "", texto)
+
+    if not texto:
+        return None
 
     try:
-        return float(texto)
-    except ValueError:
-        pass
+        if "," in texto and "." in texto:
+            if texto.rfind(",") > texto.rfind("."):
+                texto = texto.replace(".", "").replace(",", ".")
+            else:
+                texto = texto.replace(",", "")
 
-    try:
-        texto = texto.replace(".", "").replace(",", ".")
+        elif "," in texto:
+            partes = texto.split(",")
+
+            if len(partes[-1]) in (1, 2):
+                texto = texto.replace(".", "").replace(",", ".")
+            else:
+                texto = texto.replace(",", "")
+
+        elif texto.count(".") > 1:
+            texto = texto.replace(".", "")
+
         return float(texto)
+
     except ValueError:
-        return 0.0
+        return None
 
 
 def formatear_importe(importe):
-    return (
-        f"{importe:,.2f}"
-        .replace(",", "X")
-        .replace(".", ",")
-        .replace("X", ".")
-        + " €"
-    )
+    texto = f"{importe:,.2f}"
+    texto = texto.replace(",", "X")
+    texto = texto.replace(".", ",")
+    texto = texto.replace("X", ".")
+    return f"{texto} €"
 
 
-def convertir_fecha(fecha):
-    if not fecha:
-        return datetime.now(timezone.utc)
+def convertir_fecha(valor):
+    texto = limpiar_texto(valor)
+
+    if not texto:
+        return None
+
+    texto_iso = texto.replace("Z", "+00:00")
 
     try:
-        resultado = datetime.fromisoformat(
-            limpiar_texto(fecha).replace("Z", "+00:00")
-        )
+        fecha = datetime.fromisoformat(texto_iso)
 
-        if resultado.tzinfo is None:
-            resultado = resultado.replace(tzinfo=timezone.utc)
+        if fecha.tzinfo is None:
+            fecha = fecha.replace(tzinfo=timezone.utc)
 
-        return resultado
+        return fecha.astimezone(ZONA_HORARIA)
 
     except ValueError:
-        return datetime.now(timezone.utc)
+        pass
 
-
-def crear_sesion():
-    sesion = requests.Session()
-
-    reintentos = Retry(
-        total=4,
-        connect=4,
-        read=4,
-        backoff_factor=2,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET"],
+    formatos = (
+        "%Y-%m-%d",
+        "%Y%m%d",
+        "%d/%m/%Y",
+        "%Y-%m-%d %H:%M:%S",
     )
 
-    adaptador = HTTPAdapter(max_retries=reintentos)
+    for formato in formatos:
+        try:
+            fecha = datetime.strptime(texto, formato)
+            fecha = fecha.replace(tzinfo=ZONA_HORARIA)
+            return fecha
 
-    sesion.mount("https://", adaptador)
-    sesion.mount("http://", adaptador)
-
-    sesion.headers.update(
-        {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/136.0.0.0 Safari/537.36"
-            ),
-            "Accept": (
-                "application/atom+xml,application/xml,"
-                "text/xml,*/*;q=0.8"
-            ),
-            "Accept-Language": "es-ES,es;q=0.9",
-        }
-    )
-
-    return sesion
-
-
-def descargar_xml(sesion, url):
-    print(f"Descargando: {url}", flush=True)
-
-    respuesta = sesion.get(
-        url,
-        timeout=90,
-        allow_redirects=True,
-    )
-
-    respuesta.raise_for_status()
-
-    if len(respuesta.content) < 200:
-        raise RuntimeError(
-            f"El fichero descargado está vacío: {url}"
-        )
-
-    return respuesta.content, respuesta.url
-
-
-def obtener_enlace_siguiente(raiz, url_actual):
-    for elemento in list(raiz):
-        if nombre_local(elemento) != "link":
+        except ValueError:
             continue
 
-        if elemento.attrib.get("rel") == "next":
-            href = elemento.attrib.get("href", "").strip()
-
-            if href:
-                return urljoin(url_actual, href)
-
-    return ""
+    return None
 
 
-def obtener_nombre_organo(estado):
-    parte = buscar_primero(
-        estado,
-        "LocatedContractingParty",
-    )
-
-    if parte is None:
-        parte = buscar_primero(
-            estado,
-            "ContractingParty",
-        )
-
-    if parte is None:
-        return "Órgano no informado"
-
-    party_name = buscar_primero(
-        parte,
-        "PartyName",
-    )
-
-    if party_name is not None:
-        nombre = texto_primero(
-            party_name,
-            "Name",
-        )
-
-        if nombre:
-            return nombre
-
-    nombre = texto_primero(
-        parte,
-        "Name",
-    )
-
-    return nombre or "Órgano no informado"
-
-
-def obtener_adjudicatarios(estado):
-    adjudicatarios = []
-
-    for resultado in buscar_todos(
-        estado,
-        "TenderResult",
-    ):
-        adjudicatario = buscar_primero(
-            resultado,
-            "WinningParty",
-        )
-
-        if adjudicatario is None:
-            continue
-
-        party_name = buscar_primero(
-            adjudicatario,
-            "PartyName",
-        )
-
-        nombre = ""
-
-        if party_name is not None:
-            nombre = texto_primero(
-                party_name,
-                "Name",
-            )
-
-        if not nombre:
-            nombre = texto_primero(
-                adjudicatario,
-                "Name",
-            )
-
-        nif = ""
-
-        identificacion = buscar_primero(
-            adjudicatario,
-            "PartyIdentification",
-        )
-
-        if identificacion is not None:
-            nif = texto_primero(
-                identificacion,
-                "ID",
-            )
-
-        if nombre:
-            adjudicatario_completo = nombre
-
-            if nif:
-                adjudicatario_completo += f" ({nif})"
-
-            if adjudicatario_completo not in adjudicatarios:
-                adjudicatarios.append(adjudicatario_completo)
-
-    return adjudicatarios
-
-
-def obtener_fecha_adjudicacion(estado):
-    fechas = []
-
-    for resultado in buscar_todos(
-        estado,
-        "TenderResult",
-    ):
-        fecha = texto_primero(
-            resultado,
-            "AwardDate",
-        )
-
-        if fecha and fecha not in fechas:
-            fechas.append(fecha)
-
-    return ", ".join(fechas)
-
-
-def obtener_importes_adjudicacion(estado):
-    importes_sin_iva = []
-    importes_con_iva = []
-
-    for resultado in buscar_todos(
-        estado,
-        "TenderResult",
-    ):
-        proyecto_adjudicado = buscar_primero(
-            resultado,
-            "AwardedTenderedProject",
-        )
-
-        if proyecto_adjudicado is None:
-            continue
-
-        total = buscar_primero(
-            proyecto_adjudicado,
-            "LegalMonetaryTotal",
-        )
-
-        if total is None:
-            continue
-
-        sin_iva = convertir_importe(
-            texto_primero(
-                total,
-                "TaxExclusiveAmount",
-            )
-        )
-
-        con_iva = convertir_importe(
-            texto_primero(
-                total,
-                "PayableAmount",
-            )
-        )
-
-        if sin_iva > 0:
-            importes_sin_iva.append(sin_iva)
-
-        if con_iva > 0:
-            importes_con_iva.append(con_iva)
-
-    return (
-        sum(importes_sin_iva),
-        sum(importes_con_iva),
-    )
-
-
-def obtener_tipo_contrato(proyecto):
-    codigo = texto_primero(
-        proyecto,
-        "TypeCode",
-    )
-
-    equivalencias = {
-        "1": "Obras",
-        "2": "Suministros",
-        "3": "Servicios",
-        "21": "Gestión de servicios públicos",
-        "22": "Concesión de obras",
-        "31": "Servicios especiales",
-        "40": "Administrativo especial",
-        "50": "Privado",
-        "7": "Patrimonial",
-        "8": "Otros",
-    }
-
-    return equivalencias.get(codigo, codigo)
-
-
-def obtener_procedimiento(estado):
-    proceso = buscar_primero(
-        estado,
-        "TenderingProcess",
-    )
-
-    if proceso is None:
+def formatear_fecha(fecha):
+    if fecha is None:
         return ""
 
-    codigo = texto_primero(
-        proceso,
-        "ProcedureCode",
+    return fecha.astimezone(ZONA_HORARIA).strftime("%d/%m/%Y")
+
+
+def fecha_rss(fecha):
+    if fecha is None:
+        fecha = datetime.now(timezone.utc)
+
+    return format_datetime(fecha.astimezone(timezone.utc))
+
+
+# ============================================================
+# DESCARGA DE PLACSP
+# ============================================================
+
+def descargar_xml(url):
+    ultimo_error = None
+
+    for intento in range(1, 4):
+        try:
+            print(f"Descargando: {url}")
+
+            respuesta = requests.get(
+                url,
+                headers=CABECERAS,
+                timeout=(TIMEOUT_CONEXION, TIMEOUT_LECTURA),
+            )
+
+            respuesta.raise_for_status()
+
+            contenido = respuesta.content
+
+            if not contenido:
+                raise RuntimeError("PLACSP devolvió un archivo vacío.")
+
+            return contenido
+
+        except requests.RequestException as error:
+            ultimo_error = error
+            print(f"Intento {intento} fallido: {error}")
+
+            if intento < 3:
+                espera = intento * 5
+                print(f"Reintentando dentro de {espera} segundos...")
+                time.sleep(espera)
+
+    raise RuntimeError(
+        f"No se pudo descargar la información de PLACSP: {ultimo_error}"
     )
 
-    equivalencias = {
-        "1": "Abierto",
-        "2": "Restringido",
-        "3": "Negociado con publicidad",
-        "4": "Negociado sin publicidad",
-        "5": "Diálogo competitivo",
-        "6": "Contrato menor",
-        "100": "Normas internas",
-        "101": "Derivado de acuerdo marco",
-        "102": "Basado en sistema dinámico",
-        "999": "Otros",
-    }
 
-    return equivalencias.get(codigo, codigo)
-
-
-def obtener_cpv(proyecto):
-    codigos = []
-
-    for clasificacion in buscar_todos(
-        proyecto,
-        "RequiredCommodityClassification",
-    ):
-        codigo = texto_primero(
-            clasificacion,
-            "ItemClassificationCode",
-        )
-
-        if codigo and codigo not in codigos:
-            codigos.append(codigo)
-
-    return ", ".join(codigos[:10])
-
-
-def obtener_url(entry):
-    url = ""
-
-    for elemento in list(entry):
+def obtener_url_siguiente(raiz, url_actual):
+    for elemento in raiz.iter():
         if nombre_local(elemento) != "link":
             continue
 
-        href = elemento.attrib.get(
-            "href",
-            "",
-        ).strip()
+        relacion = limpiar_texto(elemento.attrib.get("rel")).lower()
 
-        rel = elemento.attrib.get(
-            "rel",
-            "",
-        )
+        if relacion != "next":
+            continue
 
-        if href and rel != "self":
-            return href
+        href = limpiar_texto(elemento.attrib.get("href"))
 
         if href:
-            url = href
+            return urljoin(url_actual, href)
 
-    if url:
-        return url
-
-    return texto_hijo_directo(
-        entry,
-        "id",
-    )
+    return None
 
 
-def extraer_adjudicacion(entry, fuente):
-    estado = buscar_primero(
-        entry,
-        "ContractFolderStatus",
-    )
+def descargar_entradas():
+    entradas = []
+    url = URL_PLACSP
+    urls_visitadas = set()
 
-    if estado is None:
-        return None
-
-    estado_codigo = texto_primero(
-        estado,
-        "ContractFolderStatusCode",
-    ).upper()
-
-    # Solo expedientes adjudicados.
-    if estado_codigo != "ADJ":
-        return None
-
-    expediente = texto_primero(
-        estado,
-        "ContractFolderID",
-    )
-
-    proyecto = buscar_primero(
-        estado,
-        "ProcurementProject",
-    )
-
-    if proyecto is None:
-        return None
-
-    objeto = texto_primero(
-        proyecto,
-        "Name",
-    )
-
-    if not objeto:
-        objeto = texto_hijo_directo(
-            entry,
-            "title",
-        )
-
-    if not objeto:
-        objeto = "Objeto no informado"
-
-    presupuesto = buscar_primero(
-        proyecto,
-        "BudgetAmount",
-    )
-
-    valor_estimado = convertir_importe(
-        texto_primero(
-            presupuesto,
-            "EstimatedOverallContractAmount",
-        )
-    )
-
-    presupuesto_sin_iva = convertir_importe(
-        texto_primero(
-            presupuesto,
-            "TaxExclusiveAmount",
-        )
-    )
-
-    presupuesto_con_iva = convertir_importe(
-        texto_primero(
-            presupuesto,
-            "TotalAmount",
-        )
-    )
-
-    if valor_estimado > 0:
-        importe_filtro = valor_estimado
-        criterio_importe = "Valor estimado"
-    else:
-        importe_filtro = presupuesto_sin_iva
-        criterio_importe = "Presupuesto base sin IVA"
-
-    if importe_filtro <= IMPORTE_MINIMO:
-        return None
-
-    adjudicatarios = obtener_adjudicatarios(estado)
-
-    if adjudicatarios:
-        texto_adjudicatarios = ", ".join(adjudicatarios)
-    else:
-        texto_adjudicatarios = "Adjudicatario no informado"
-
-    (
-        adjudicacion_sin_iva,
-        adjudicacion_con_iva,
-    ) = obtener_importes_adjudicacion(estado)
-
-    fecha_adjudicacion = obtener_fecha_adjudicacion(
-        estado
-    )
-
-    organo = obtener_nombre_organo(estado)
-    tipo_contrato = obtener_tipo_contrato(proyecto)
-    procedimiento = obtener_procedimiento(estado)
-    cpv = obtener_cpv(proyecto)
-    url = obtener_url(entry)
-
-    actualizado = texto_hijo_directo(
-        entry,
-        "updated",
-    )
-
-    publicado = texto_hijo_directo(
-        entry,
-        "published",
-    )
-
-    fecha_dt = convertir_fecha(
-        actualizado or publicado
-    )
-
-    lugar = buscar_primero(
-        proyecto,
-        "RealizedLocation",
-    )
-
-    provincia = texto_primero(
-        lugar,
-        "CountrySubentity",
-    )
-
-    if not provincia:
-        provincia = texto_primero(
-            lugar,
-            "CountrySubentityCode",
-        )
-
-    identidad = expediente or texto_hijo_directo(
-        entry,
-        "id",
-    )
-
-    if not identidad:
-        identidad = (
-            f"{objeto}|{organo}|{importe_filtro}"
-        )
-
-    guid = hashlib.sha256(
-        f"{VERSION_GUID}|{identidad}".encode("utf-8")
-    ).hexdigest()
-
-    titulo = (
-        f"ADJUDICADA ESPAÑA | "
-        f"{texto_adjudicatarios} | "
-        f"{formatear_importe(importe_filtro)} | "
-        f"{objeto}"
-    )
-
-    if len(titulo) > 450:
-        titulo = titulo[:447] + "..."
-
-    descripcion = (
-        f"<p><strong>Estado:</strong> "
-        f"ADJUDICADA ESPAÑA</p>"
-        f"<p><strong>Adjudicatario:</strong> "
-        f"{html.escape(texto_adjudicatarios)}</p>"
-        f"<p><strong>Expediente:</strong> "
-        f"{html.escape(expediente)}</p>"
-        f"<p><strong>Objeto:</strong> "
-        f"{html.escape(objeto)}</p>"
-        f"<p><strong>Órgano de contratación:</strong> "
-        f"{html.escape(organo)}</p>"
-        f"<p><strong>{html.escape(criterio_importe)}:</strong> "
-        f"{html.escape(formatear_importe(importe_filtro))}</p>"
-    )
-
-    if valor_estimado:
-        descripcion += (
-            f"<p><strong>Valor estimado:</strong> "
-            f"{html.escape(formatear_importe(valor_estimado))}</p>"
-        )
-
-    if presupuesto_sin_iva:
-        descripcion += (
-            f"<p><strong>Presupuesto sin IVA:</strong> "
-            f"{html.escape(formatear_importe(presupuesto_sin_iva))}</p>"
-        )
-
-    if presupuesto_con_iva:
-        descripcion += (
-            f"<p><strong>Presupuesto con IVA:</strong> "
-            f"{html.escape(formatear_importe(presupuesto_con_iva))}</p>"
-        )
-
-    if adjudicacion_sin_iva:
-        descripcion += (
-            f"<p><strong>Importe adjudicado sin IVA:</strong> "
-            f"{html.escape(formatear_importe(adjudicacion_sin_iva))}</p>"
-        )
-
-    if adjudicacion_con_iva:
-        descripcion += (
-            f"<p><strong>Importe adjudicado con IVA:</strong> "
-            f"{html.escape(formatear_importe(adjudicacion_con_iva))}</p>"
-        )
-
-    if fecha_adjudicacion:
-        descripcion += (
-            f"<p><strong>Fecha de adjudicación:</strong> "
-            f"{html.escape(fecha_adjudicacion)}</p>"
-        )
-
-    if tipo_contrato:
-        descripcion += (
-            f"<p><strong>Tipo de contrato:</strong> "
-            f"{html.escape(tipo_contrato)}</p>"
-        )
-
-    if procedimiento:
-        descripcion += (
-            f"<p><strong>Procedimiento:</strong> "
-            f"{html.escape(procedimiento)}</p>"
-        )
-
-    if provincia:
-        descripcion += (
-            f"<p><strong>Lugar de ejecución:</strong> "
-            f"{html.escape(provincia)}</p>"
-        )
-
-    if cpv:
-        descripcion += (
-            f"<p><strong>Código CPV:</strong> "
-            f"{html.escape(cpv)}</p>"
-        )
-
-    descripcion += (
-        f"<p><strong>Fuente:</strong> "
-        f"{html.escape(fuente)}</p>"
-        f'<p><a href="{html.escape(url)}">'
-        f"Consultar la adjudicación oficial</a></p>"
-    )
-
-    return {
-        "id": guid,
-        "version": VERSION_GUID,
-        "clave_expediente": identidad,
-        "expediente": expediente,
-        "titulo": titulo,
-        "objeto": objeto,
-        "organo": organo,
-        "adjudicatarios": adjudicatarios,
-        "texto_adjudicatarios": texto_adjudicatarios,
-        "valor_estimado": valor_estimado,
-        "presupuesto_sin_iva": presupuesto_sin_iva,
-        "presupuesto_con_iva": presupuesto_con_iva,
-        "importe_filtro": importe_filtro,
-        "criterio_importe": criterio_importe,
-        "adjudicacion_sin_iva": adjudicacion_sin_iva,
-        "adjudicacion_con_iva": adjudicacion_con_iva,
-        "fecha_adjudicacion": fecha_adjudicacion,
-        "tipo_contrato": tipo_contrato,
-        "procedimiento": procedimiento,
-        "estado": "ADJ",
-        "cpv": cpv,
-        "lugar": provincia,
-        "fuente": fuente,
-        "url": url,
-        "fecha_iso": fecha_dt.isoformat(),
-        "descripcion": descripcion,
-    }
-
-
-def descargar_fuente(sesion, fuente):
-    url = fuente["url"]
-    visitadas = set()
-    adjudicaciones = []
-
-    for numero_pagina in range(
-        1,
-        MAXIMO_PAGINAS_POR_FUENTE + 1,
-    ):
-        if not url or url in visitadas:
+    for numero_pagina in range(1, MAXIMO_PAGINAS + 1):
+        if not url or url in urls_visitadas:
             break
 
-        visitadas.add(url)
+        urls_visitadas.add(url)
 
-        print(
-            f'{fuente["nombre"]}: página {numero_pagina}',
-            flush=True,
-        )
+        print(f"Procesando página {numero_pagina}/{MAXIMO_PAGINAS}")
 
-        contenido, url_final = descargar_xml(
-            sesion,
-            url,
-        )
+        contenido = descargar_xml(url)
 
         try:
             raiz = ET.fromstring(contenido)
 
         except ET.ParseError as error:
             raise RuntimeError(
-                f'XML incorrecto en {fuente["nombre"]}: {error}'
+                f"PLACSP no devolvió un XML válido: {error}"
             ) from error
 
-        entradas = [
+        entradas_pagina = [
             elemento
-            for elemento in list(raiz)
+            for elemento in raiz.iter()
             if nombre_local(elemento) == "entry"
         ]
 
         print(
-            f"Entradas examinadas: {len(entradas)}",
-            flush=True,
+            f"Entradas encontradas en esta página: "
+            f"{len(entradas_pagina)}"
         )
 
-        for entrada in entradas:
-            adjudicacion = extraer_adjudicacion(
-                entrada,
-                fuente["nombre"],
-            )
+        entradas.extend(entradas_pagina)
 
-            if adjudicacion:
-                adjudicaciones.append(adjudicacion)
+        siguiente = obtener_url_siguiente(raiz, url)
 
-        url = obtener_enlace_siguiente(
-            raiz,
-            url_final,
-        )
+        if not siguiente:
+            break
 
-    print(
-        f'{fuente["nombre"]}: '
-        f"{len(adjudicaciones)} adjudicaciones válidas",
-        flush=True,
+        url = siguiente
+
+    print(f"Total de entradas descargadas: {len(entradas)}")
+    return entradas
+
+
+# ============================================================
+# EXTRACCIÓN DE LICITACIONES
+# ============================================================
+
+def obtener_estado(entrada):
+    candidatos = [
+        "ContractFolderStatusCode",
+        "TenderResultCode",
+        "ResultCode",
+    ]
+
+    for nombre in candidatos:
+        for elemento in buscar_descendientes(entrada, nombre):
+            valor = texto_elemento(elemento).upper()
+
+            if valor:
+                return valor
+
+    return ""
+
+
+def esta_adjudicada(entrada):
+    estado = obtener_estado(entrada)
+
+    codigos_adjudicados = {
+        "ADJ",
+        "ADJUDICADA",
+        "AWARDED",
+        "RESOLVED",
+    }
+
+    if estado in codigos_adjudicados:
+        return True
+
+    # Algunas entradas incorporan la adjudicación dentro de TenderResult
+    # aunque el código general no sea fácilmente identificable.
+    resultados = buscar_descendientes(entrada, "TenderResult")
+
+    for resultado in resultados:
+        if buscar_descendiente(resultado, "AwardDate") is not None:
+            return True
+
+    return False
+
+
+def obtener_url_licitacion(entrada):
+    # Preferencia por enlaces HTML de la entrada Atom.
+    for elemento in entrada.iter():
+        if nombre_local(elemento) != "link":
+            continue
+
+        href = limpiar_texto(elemento.attrib.get("href"))
+        tipo = limpiar_texto(elemento.attrib.get("type")).lower()
+        relacion = limpiar_texto(elemento.attrib.get("rel")).lower()
+
+        if not href:
+            continue
+
+        if (
+            "text/html" in tipo
+            or relacion == "alternate"
+            or "detalle_licitacion" in href
+        ):
+            return urljoin(URL_PLACSP, href)
+
+    # Segunda posibilidad: URI incluida dentro de ContractFolderStatus.
+    for elemento in entrada.iter():
+        valor = texto_elemento(elemento)
+
+        if (
+            valor.startswith("https://")
+            and "contrataciondelestado.es" in valor
+        ):
+            return valor
+
+    return "https://contrataciondelestado.es/"
+
+
+def obtener_expediente(entrada):
+    expediente = texto_descendiente(
+        entrada,
+        [
+            "ContractFolderID",
+            "ProcurementProjectID",
+            "ID",
+        ],
     )
 
-    return adjudicaciones
+    return expediente or "SIN-EXPEDIENTE"
 
 
-def cargar_estado():
-    if not ARCHIVO_ESTADO.exists():
+def obtener_objeto(entrada):
+    proyectos = buscar_descendientes(entrada, "ProcurementProject")
+
+    for proyecto in proyectos:
+        nombre = texto_descendiente(
+            proyecto,
+            ["Name", "Description"],
+        )
+
+        if nombre:
+            return nombre
+
+    titulo_atom = ""
+
+    for hijo in list(entrada):
+        if nombre_local(hijo) == "title":
+            titulo_atom = texto_elemento(hijo)
+            break
+
+    return titulo_atom or "Adjudicación publicada en PLACSP"
+
+
+def obtener_organo_contratacion(entrada):
+    ubicaciones = buscar_descendientes(
+        entrada,
+        "LocatedContractingParty",
+    )
+
+    for ubicacion in ubicaciones:
+        nombre = texto_descendiente(
+            ubicacion,
+            ["Name", "PartyName"],
+        )
+
+        if nombre:
+            return nombre
+
+    return ""
+
+
+def obtener_adjudicatario(resultado):
+    partes_ganadoras = buscar_descendientes(
+        resultado,
+        [
+            "WinningParty",
+            "WinningPartyReference",
+            "ContractorParty",
+        ],
+    )
+
+    nombres = []
+    identificadores = []
+
+    for parte in partes_ganadoras:
+        for nombre_elemento in buscar_descendientes(
+            parte,
+            ["Name", "RegistrationName"],
+        ):
+            nombre = texto_elemento(nombre_elemento)
+
+            if nombre and nombre not in nombres:
+                nombres.append(nombre)
+
+        for id_elemento in buscar_descendientes(
+            parte,
+            ["ID", "CompanyID"],
+        ):
+            identificador = texto_elemento(id_elemento)
+
+            if (
+                identificador
+                and identificador not in identificadores
+                and identificador not in nombres
+            ):
+                identificadores.append(identificador)
+
+    if not nombres:
+        # Compatibilidad con versiones diferentes del esquema CODICE.
+        for elemento in buscar_descendientes(resultado, "PartyName"):
+            nombre = texto_descendiente(elemento, "Name")
+
+            if nombre and nombre not in nombres:
+                nombres.append(nombre)
+
+    if not nombres:
+        return ""
+
+    adjudicatarios = []
+
+    for posicion, nombre in enumerate(nombres[:5]):
+        if posicion < len(identificadores):
+            identificador = identificadores[posicion]
+
+            if identificador and identificador not in nombre:
+                texto = f"{nombre} ({identificador})"
+            else:
+                texto = nombre
+        else:
+            texto = nombre
+
+        if texto not in adjudicatarios:
+            adjudicatarios.append(texto)
+
+    return " / ".join(adjudicatarios)
+
+
+def obtener_importe_resultado(resultado):
+    prioridades = [
+        "PayableAmount",
+        "TaxExclusiveAmount",
+        "TotalAmount",
+        "AwardedAmount",
+        "EstimatedOverallContractAmount",
+    ]
+
+    for nombre in prioridades:
+        importes = []
+
+        for elemento in buscar_descendientes(resultado, nombre):
+            moneda = limpiar_texto(
+                elemento.attrib.get("currencyID", "EUR")
+            ).upper()
+
+            if moneda and moneda != "EUR":
+                continue
+
+            importe = convertir_importe(texto_elemento(elemento))
+
+            if importe is not None and importe >= 0:
+                importes.append(importe)
+
+        if importes:
+            return max(importes)
+
+    return None
+
+
+def obtener_fecha_adjudicacion(resultado):
+    campos = [
+        "AwardDate",
+        "ContractAwardDate",
+        "DecisionDate",
+    ]
+
+    for campo in campos:
+        for elemento in buscar_descendientes(resultado, campo):
+            fecha = convertir_fecha(texto_elemento(elemento))
+
+            if fecha:
+                return fecha
+
+    return None
+
+
+def obtener_fecha_publicacion(entrada):
+    for campo in ("published", "updated", "IssueDate"):
+        for elemento in entrada.iter():
+            if nombre_local(elemento) == campo:
+                fecha = convertir_fecha(texto_elemento(elemento))
+
+                if fecha:
+                    return fecha
+
+    return datetime.now(timezone.utc)
+
+
+def obtener_resultados_adjudicados(entrada):
+    resultados = buscar_descendientes(entrada, "TenderResult")
+    encontrados = []
+
+    for resultado in resultados:
+        adjudicatario = obtener_adjudicatario(resultado)
+        importe = obtener_importe_resultado(resultado)
+        fecha = obtener_fecha_adjudicacion(resultado)
+
+        # No generamos una noticia incompleta.
+        if not adjudicatario:
+            continue
+
+        if importe is None or importe < IMPORTE_MINIMO:
+            continue
+
+        if fecha is None:
+            print(
+                "Descartada adjudicación sin fecha oficial "
+                "de adjudicación."
+            )
+            continue
+
+        encontrados.append(
+            {
+                "adjudicatario": adjudicatario,
+                "importe": importe,
+                "fecha_adjudicacion": fecha,
+            }
+        )
+
+    return encontrados
+
+
+def convertir_entrada(entrada):
+    if not esta_adjudicada(entrada):
+        return []
+
+    expediente = obtener_expediente(entrada)
+    objeto = obtener_objeto(entrada)
+    organo = obtener_organo_contratacion(entrada)
+    enlace = obtener_url_licitacion(entrada)
+    fecha_publicacion = obtener_fecha_publicacion(entrada)
+
+    resultados = obtener_resultados_adjudicados(entrada)
+    noticias = []
+
+    for resultado in resultados:
+        adjudicatario = resultado["adjudicatario"]
+        importe = resultado["importe"]
+        fecha_adjudicacion = resultado["fecha_adjudicacion"]
+
+        fecha_texto = formatear_fecha(fecha_adjudicacion)
+        importe_texto = formatear_importe(importe)
+
+        titulo = (
+            f"ADJUDICADA ESPAÑA | "
+            f"{fecha_texto} | "
+            f"{adjudicatario} | "
+            f"{importe_texto} | "
+            f"{objeto}"
+        )
+
+        descripcion = [
+            "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p>",
+            (
+                "<p><strong>Fecha de adjudicación:</strong> "
+                f"{html.escape(fecha_texto)}</p>"
+            ),
+            (
+                "<p><strong>Adjudicatario:</strong> "
+                f"{html.escape(adjudicatario)}</p>"
+            ),
+            (
+                "<p><strong>Importe adjudicado:</strong> "
+                f"{html.escape(importe_texto)}</p>"
+            ),
+            (
+                "<p><strong>Objeto:</strong> "
+                f"{html.escape(objeto)}</p>"
+            ),
+            (
+                "<p><strong>Número de expediente:</strong> "
+                f"{html.escape(expediente)}</p>"
+            ),
+        ]
+
+        if organo:
+            descripcion.append(
+                "<p><strong>Órgano de contratación:</strong> "
+                f"{html.escape(organo)}</p>"
+            )
+
+        descripcion.append(
+            f'<p><a href="{html.escape(enlace)}">'
+            "Abrir adjudicación en la Plataforma de Contratación"
+            "</a></p>"
+        )
+
+        identificador_original = (
+            f"adjudicada-espana-v3-fecha|"
+            f"{expediente}|"
+            f"{fecha_texto}|"
+            f"{adjudicatario}|"
+            f"{importe:.2f}"
+        )
+
+        identificador = hashlib.sha256(
+            identificador_original.encode("utf-8")
+        ).hexdigest()
+
+        noticias.append(
+            {
+                "id": identificador,
+                "titulo": titulo,
+                "url": enlace,
+                "descripcion": "".join(descripcion),
+                "fecha_adjudicacion": fecha_adjudicacion.isoformat(),
+                "fecha_publicacion": fecha_publicacion.isoformat(),
+                "expediente": expediente,
+                "adjudicatario": adjudicatario,
+                "importe": importe,
+                "objeto": objeto,
+            }
+        )
+
+    return noticias
+
+
+# ============================================================
+# HISTORIAL
+# ============================================================
+
+def cargar_historial():
+    if not ARCHIVO_HISTORIAL.exists():
         return []
 
     try:
         contenido = json.loads(
-            ARCHIVO_ESTADO.read_text(
-                encoding="utf-8",
-            )
+            ARCHIVO_HISTORIAL.read_text(encoding="utf-8")
         )
-
-        if isinstance(contenido, dict):
-            contenido = contenido.get(
-                "licitaciones",
-                [],
-            )
 
         if isinstance(contenido, list):
             return contenido
 
-    except Exception as error:
-        print(
-            f"No se pudo leer estado.json: {error}",
-            flush=True,
-        )
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"No se pudo leer el historial anterior: {error}")
 
     return []
 
 
-def combinar_adjudicaciones(nuevas, anteriores):
-    resultado = []
-    expedientes_vistos = set()
-
-    nuevas.sort(
-        key=lambda elemento: elemento.get(
-            "fecha_iso",
-            "",
-        ),
-        reverse=True,
-    )
-
-    for adjudicacion in nuevas + anteriores:
-        if adjudicacion.get(
-            "estado",
-            "",
-        ).upper() != "ADJ":
-            continue
-
-        if adjudicacion.get("version") != VERSION_GUID:
-            continue
-
-        importe = float(
-            adjudicacion.get(
-                "importe_filtro",
-                0,
-            )
-            or 0
-        )
-
-        if importe <= IMPORTE_MINIMO:
-            continue
-
-        titulo = adjudicacion.get(
-            "titulo",
-            "",
-        )
-
-        if not titulo.startswith(
-            "ADJUDICADA ESPAÑA |"
-        ):
-            continue
-
-        clave = (
-            adjudicacion.get("clave_expediente")
-            or adjudicacion.get("expediente")
-            or adjudicacion.get("id")
-        )
-
-        if not clave:
-            continue
-
-        if clave in expedientes_vistos:
-            continue
-
-        expedientes_vistos.add(clave)
-        resultado.append(adjudicacion)
-
-    resultado.sort(
-        key=lambda elemento: elemento.get(
-            "fecha_iso",
-            "",
-        ),
-        reverse=True,
-    )
-
-    return resultado[:MAXIMO_LICITACIONES]
-
-
-def guardar_estado(adjudicaciones):
-    contenido = {
-        "actualizado": datetime.now(
-            timezone.utc
-        ).isoformat(),
-        "version": VERSION_GUID,
-        "filtro_estado": "ADJ",
-        "importe_minimo": IMPORTE_MINIMO,
-        "cantidad": len(adjudicaciones),
-        "licitaciones": adjudicaciones,
-    }
-
-    ARCHIVO_ESTADO.write_text(
+def guardar_historial(noticias):
+    ARCHIVO_HISTORIAL.write_text(
         json.dumps(
-            contenido,
+            noticias[:MAXIMO_ENTRADAS_RSS],
             ensure_ascii=False,
             indent=2,
         ),
@@ -940,128 +774,121 @@ def guardar_estado(adjudicaciones):
     )
 
 
-def crear_rss(adjudicaciones):
+def mezclar_noticias(nuevas, anteriores):
+    por_id = {}
+
+    for noticia in anteriores:
+        identificador = noticia.get("id")
+
+        if identificador:
+            por_id[identificador] = noticia
+
+    for noticia in nuevas:
+        por_id[noticia["id"]] = noticia
+
+    resultado = list(por_id.values())
+
+    resultado.sort(
+        key=lambda noticia: (
+            noticia.get("fecha_adjudicacion")
+            or noticia.get("fecha_publicacion")
+            or ""
+        ),
+        reverse=True,
+    )
+
+    return resultado[:MAXIMO_ENTRADAS_RSS]
+
+
+# ============================================================
+# CREACIÓN DEL RSS
+# ============================================================
+
+def crear_rss(noticias):
+    ET.register_namespace(
+        "atom",
+        "http://www.w3.org/2005/Atom",
+    )
+
     rss = ET.Element(
         "rss",
         {
             "version": "2.0",
             "xmlns:atom": "http://www.w3.org/2005/Atom",
-            "xmlns:content": (
-                "http://purl.org/rss/1.0/modules/content/"
-            ),
         },
     )
 
-    canal = ET.SubElement(
-        rss,
-        "channel",
-    )
+    canal = ET.SubElement(rss, "channel")
 
-    ET.SubElement(
-        canal,
-        "title",
-    ).text = (
+    ET.SubElement(canal, "title").text = (
         "Adjudicaciones España superiores a 500.000 €"
     )
 
-    ET.SubElement(
-        canal,
-        "link",
-    ).text = (
+    ET.SubElement(canal, "link").text = (
         "https://contrataciondelestado.es/"
     )
 
-    ET.SubElement(
-        canal,
-        "description",
-    ).text = (
-        "Adjudicaciones publicadas en la Plataforma de "
-        "Contratación del Sector Público de España con valor "
-        "estimado superior a 500.000 euros."
+    ET.SubElement(canal, "description").text = (
+        "Adjudicaciones españolas con fecha oficial, adjudicatario "
+        "e importe igual o superior a 500.000 euros."
     )
 
-    ET.SubElement(
-        canal,
-        "language",
-    ).text = "es-es"
+    ET.SubElement(canal, "language").text = "es-ES"
 
-    ET.SubElement(
-        canal,
-        "generator",
-    ).text = "GitHub Actions - plis2100"
-
-    ET.SubElement(
-        canal,
-        "ttl",
-    ).text = "300"
-
-    ET.SubElement(
-        canal,
-        "lastBuildDate",
-    ).text = format_datetime(
+    ET.SubElement(canal, "lastBuildDate").text = fecha_rss(
         datetime.now(timezone.utc)
     )
 
-    atom_link = ET.SubElement(
+    ET.SubElement(canal, "ttl").text = "300"
+
+    ET.SubElement(
         canal,
-        "atom:link",
+        "{http://www.w3.org/2005/Atom}link",
+        {
+            "href": URL_RSS,
+            "rel": "self",
+            "type": "application/rss+xml",
+        },
     )
 
-    atom_link.set("href", URL_RSS)
-    atom_link.set("rel", "self")
-    atom_link.set("type", "application/rss+xml")
+    for noticia in noticias:
+        entrada = ET.SubElement(canal, "item")
 
-    for adjudicacion in adjudicaciones:
-        item = ET.SubElement(
-            canal,
-            "item",
-        )
+        ET.SubElement(entrada, "title").text = noticia["titulo"]
+        ET.SubElement(entrada, "link").text = noticia["url"]
 
         ET.SubElement(
-            item,
-            "title",
-        ).text = adjudicacion["titulo"]
-
-        ET.SubElement(
-            item,
-            "link",
-        ).text = adjudicacion["url"]
-
-        guid = ET.SubElement(
-            item,
+            entrada,
             "guid",
-        )
-
-        guid.set(
-            "isPermaLink",
-            "false",
-        )
-
-        guid.text = adjudicacion["id"]
+            {"isPermaLink": "false"},
+        ).text = noticia["id"]
 
         fecha = convertir_fecha(
-            adjudicacion.get(
-                "fecha_iso",
-                "",
-            )
+            noticia.get("fecha_adjudicacion")
+            or noticia.get("fecha_publicacion")
         )
 
-        ET.SubElement(
-            item,
-            "pubDate",
-        ).text = format_datetime(fecha)
+        ET.SubElement(entrada, "pubDate").text = fecha_rss(fecha)
 
         ET.SubElement(
-            item,
+            entrada,
             "description",
-        ).text = adjudicacion["descripcion"]
+        ).text = noticia["descripcion"]
 
-        contenido = ET.SubElement(
-            item,
-            "content:encoded",
-        )
+        ET.SubElement(
+            entrada,
+            "category",
+        ).text = "ADJUDICADA ESPAÑA"
 
-        contenido.text = adjudicacion["descripcion"]
+        ET.SubElement(
+            entrada,
+            "category",
+        ).text = "Contratación pública"
+
+        ET.SubElement(
+            entrada,
+            "category",
+        ).text = "Más de 500.000 euros"
 
     arbol = ET.ElementTree(rss)
     ET.indent(arbol, space="  ")
@@ -1073,65 +900,69 @@ def crear_rss(adjudicaciones):
     )
 
 
+# ============================================================
+# PROGRAMA PRINCIPAL
+# ============================================================
+
 def main():
-    try:
-        sesion = crear_sesion()
-        nuevas = []
-        fuentes_correctas = 0
+    print("==================================================")
+    print("RSS DE ADJUDICACIONES DE ESPAÑA")
+    print("==================================================")
 
-        for fuente in FUENTES:
-            try:
-                nuevas.extend(
-                    descargar_fuente(
-                        sesion,
-                        fuente,
-                    )
-                )
+    entradas = descargar_entradas()
 
-                fuentes_correctas += 1
+    nuevas = []
+    errores = 0
 
-            except Exception as error:
-                print(
-                    f'AVISO: Falló {fuente["nombre"]}: {error}',
-                    file=sys.stderr,
-                    flush=True,
-                )
+    for numero, entrada in enumerate(entradas, start=1):
+        try:
+            noticias = convertir_entrada(entrada)
+            nuevas.extend(noticias)
 
-        if fuentes_correctas == 0:
-            raise RuntimeError(
-                "No se pudo descargar ninguna fuente oficial."
+        except Exception as error:
+            errores += 1
+            print(
+                f"Error procesando la entrada {numero}: "
+                f"{type(error).__name__}: {error}"
             )
 
-        anteriores = cargar_estado()
+    anteriores = cargar_historial()
+    resultado = mezclar_noticias(nuevas, anteriores)
 
-        adjudicaciones = combinar_adjudicaciones(
-            nuevas,
-            anteriores,
-        )
+    guardar_historial(resultado)
+    crear_rss(resultado)
 
-        guardar_estado(adjudicaciones)
-        crear_rss(adjudicaciones)
+    print("")
+    print("==================================================")
+    print("PROCESO FINALIZADO CORRECTAMENTE")
+    print("==================================================")
+    print(f"Entradas descargadas: {len(entradas)}")
+    print(f"Adjudicaciones nuevas válidas: {len(nuevas)}")
+    print(f"Entradas guardadas en el RSS: {len(resultado)}")
+    print(f"Entradas con error: {errores}")
+    print(f"Archivo generado: {ARCHIVO_RSS}")
+    print(f"URL para Feedly: {URL_RSS}")
 
+    if not nuevas:
+        print("")
         print(
-            f"RSS creada correctamente con "
-            f"{len(adjudicaciones)} adjudicaciones.",
-            flush=True,
+            "AVISO: la consulta terminó correctamente, pero en las "
+            "páginas revisadas no había nuevas adjudicaciones con "
+            "fecha, adjudicatario e importe superior a 500.000 €."
         )
-
-        print(
-            f"URL para Feedly: {URL_RSS}",
-            flush=True,
-        )
-
-    except Exception as error:
-        print(
-            f"ERROR: {error}",
-            file=sys.stderr,
-            flush=True,
-        )
-
-        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+
+    except KeyboardInterrupt:
+        print("Proceso cancelado.", file=sys.stderr)
+        sys.exit(130)
+
+    except Exception as error:
+        print(
+            f"ERROR GENERAL: {type(error).__name__}: {error}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
