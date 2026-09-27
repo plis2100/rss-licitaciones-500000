@@ -36,7 +36,9 @@ FUENTES = [
 
 IMPORTE_MINIMO = 500000.00
 MAXIMO_PAGINAS_POR_FUENTE = 3
-MAXIMO_LICITACIONES_GUARDADAS = 1500
+MAXIMO_LICITACIONES = 1500
+
+VERSION_GUID = "v4-adjudicada-espana-adjudicatario"
 
 ARCHIVO_RSS = Path("feed.xml")
 ARCHIVO_ESTADO = Path("estado.json")
@@ -89,24 +91,15 @@ def texto_primero(elemento, nombre):
     return limpiar_texto(candidato.text)
 
 
-def hijo_directo(elemento, nombre):
+def texto_hijo_directo(elemento, nombre):
     if elemento is None:
-        return None
+        return ""
 
     for hijo in list(elemento):
         if nombre_local(hijo) == nombre:
-            return hijo
+            return limpiar_texto(hijo.text)
 
-    return None
-
-
-def texto_hijo_directo(elemento, nombre):
-    hijo = hijo_directo(elemento, nombre)
-
-    if hijo is None:
-        return ""
-
-    return limpiar_texto(hijo.text)
+    return ""
 
 
 def convertir_importe(texto):
@@ -114,8 +107,8 @@ def convertir_importe(texto):
         return 0.0
 
     texto = limpiar_texto(texto)
-    texto = texto.replace("€", "")
     texto = texto.replace("EUR", "")
+    texto = texto.replace("€", "")
     texto = texto.replace(" ", "")
 
     try:
@@ -140,15 +133,14 @@ def formatear_importe(importe):
     )
 
 
-def convertir_fecha_iso(fecha):
+def convertir_fecha(fecha):
     if not fecha:
         return datetime.now(timezone.utc)
 
-    fecha = limpiar_texto(fecha)
-
     try:
-        fecha = fecha.replace("Z", "+00:00")
-        resultado = datetime.fromisoformat(fecha)
+        resultado = datetime.fromisoformat(
+            limpiar_texto(fecha).replace("Z", "+00:00")
+        )
 
         if resultado.tzinfo is None:
             resultado = resultado.replace(tzinfo=timezone.utc)
@@ -205,14 +197,12 @@ def descargar_xml(sesion, url):
 
     respuesta.raise_for_status()
 
-    contenido = respuesta.content
-
-    if len(contenido) < 200:
+    if len(respuesta.content) < 200:
         raise RuntimeError(
             f"El fichero descargado está vacío: {url}"
         )
 
-    return contenido, respuesta.url
+    return respuesta.content, respuesta.url
 
 
 def obtener_enlace_siguiente(raiz, url_actual):
@@ -242,7 +232,7 @@ def obtener_nombre_organo(estado):
         )
 
     if parte is None:
-        return ""
+        return "Órgano no informado"
 
     party_name = buscar_primero(
         parte,
@@ -258,25 +248,139 @@ def obtener_nombre_organo(estado):
         if nombre:
             return nombre
 
-    return texto_primero(parte, "Name")
+    nombre = texto_primero(
+        parte,
+        "Name",
+    )
+
+    return nombre or "Órgano no informado"
 
 
-def obtener_cpv(proyecto):
-    codigos = []
+def obtener_adjudicatarios(estado):
+    adjudicatarios = []
 
-    for clasificacion in buscar_todos(
-        proyecto,
-        "RequiredCommodityClassification",
+    for resultado in buscar_todos(
+        estado,
+        "TenderResult",
     ):
-        codigo = texto_primero(
-            clasificacion,
-            "ItemClassificationCode",
+        adjudicatario = buscar_primero(
+            resultado,
+            "WinningParty",
         )
 
-        if codigo and codigo not in codigos:
-            codigos.append(codigo)
+        if adjudicatario is None:
+            continue
 
-    return ", ".join(codigos[:10])
+        party_name = buscar_primero(
+            adjudicatario,
+            "PartyName",
+        )
+
+        nombre = ""
+
+        if party_name is not None:
+            nombre = texto_primero(
+                party_name,
+                "Name",
+            )
+
+        if not nombre:
+            nombre = texto_primero(
+                adjudicatario,
+                "Name",
+            )
+
+        nif = ""
+
+        identificacion = buscar_primero(
+            adjudicatario,
+            "PartyIdentification",
+        )
+
+        if identificacion is not None:
+            nif = texto_primero(
+                identificacion,
+                "ID",
+            )
+
+        if nombre:
+            adjudicatario_completo = nombre
+
+            if nif:
+                adjudicatario_completo += f" ({nif})"
+
+            if adjudicatario_completo not in adjudicatarios:
+                adjudicatarios.append(adjudicatario_completo)
+
+    return adjudicatarios
+
+
+def obtener_fecha_adjudicacion(estado):
+    fechas = []
+
+    for resultado in buscar_todos(
+        estado,
+        "TenderResult",
+    ):
+        fecha = texto_primero(
+            resultado,
+            "AwardDate",
+        )
+
+        if fecha and fecha not in fechas:
+            fechas.append(fecha)
+
+    return ", ".join(fechas)
+
+
+def obtener_importes_adjudicacion(estado):
+    importes_sin_iva = []
+    importes_con_iva = []
+
+    for resultado in buscar_todos(
+        estado,
+        "TenderResult",
+    ):
+        proyecto_adjudicado = buscar_primero(
+            resultado,
+            "AwardedTenderedProject",
+        )
+
+        if proyecto_adjudicado is None:
+            continue
+
+        total = buscar_primero(
+            proyecto_adjudicado,
+            "LegalMonetaryTotal",
+        )
+
+        if total is None:
+            continue
+
+        sin_iva = convertir_importe(
+            texto_primero(
+                total,
+                "TaxExclusiveAmount",
+            )
+        )
+
+        con_iva = convertir_importe(
+            texto_primero(
+                total,
+                "PayableAmount",
+            )
+        )
+
+        if sin_iva > 0:
+            importes_sin_iva.append(sin_iva)
+
+        if con_iva > 0:
+            importes_con_iva.append(con_iva)
+
+    return (
+        sum(importes_sin_iva),
+        sum(importes_con_iva),
+    )
 
 
 def obtener_tipo_contrato(proyecto):
@@ -331,134 +435,57 @@ def obtener_procedimiento(estado):
     return equivalencias.get(codigo, codigo)
 
 
-def obtener_adjudicatarios(estado):
-    adjudicatarios = []
+def obtener_cpv(proyecto):
+    codigos = []
 
-    for resultado in buscar_todos(
-        estado,
-        "TenderResult",
+    for clasificacion in buscar_todos(
+        proyecto,
+        "RequiredCommodityClassification",
     ):
-        adjudicatario = buscar_primero(
-            resultado,
-            "WinningParty",
+        codigo = texto_primero(
+            clasificacion,
+            "ItemClassificationCode",
         )
 
-        if adjudicatario is None:
+        if codigo and codigo not in codigos:
+            codigos.append(codigo)
+
+    return ", ".join(codigos[:10])
+
+
+def obtener_url(entry):
+    url = ""
+
+    for elemento in list(entry):
+        if nombre_local(elemento) != "link":
             continue
 
-        party_name = buscar_primero(
-            adjudicatario,
-            "PartyName",
+        href = elemento.attrib.get(
+            "href",
+            "",
+        ).strip()
+
+        rel = elemento.attrib.get(
+            "rel",
+            "",
         )
 
-        nombre = ""
+        if href and rel != "self":
+            return href
 
-        if party_name is not None:
-            nombre = texto_primero(
-                party_name,
-                "Name",
-            )
+        if href:
+            url = href
 
-        if not nombre:
-            nombre = texto_primero(
-                adjudicatario,
-                "Name",
-            )
+    if url:
+        return url
 
-        nif = ""
-
-        identificacion = buscar_primero(
-            adjudicatario,
-            "PartyIdentification",
-        )
-
-        if identificacion is not None:
-            nif = texto_primero(
-                identificacion,
-                "ID",
-            )
-
-        if nombre:
-            texto = nombre
-
-            if nif:
-                texto += f" ({nif})"
-
-            if texto not in adjudicatarios:
-                adjudicatarios.append(texto)
-
-    return adjudicatarios
-
-
-def obtener_fecha_adjudicacion(estado):
-    fechas = []
-
-    for resultado in buscar_todos(
-        estado,
-        "TenderResult",
-    ):
-        fecha = texto_primero(
-            resultado,
-            "AwardDate",
-        )
-
-        if fecha and fecha not in fechas:
-            fechas.append(fecha)
-
-    return ", ".join(fechas)
-
-
-def obtener_importes_adjudicacion(estado):
-    importes_sin_iva = []
-    importes_con_iva = []
-
-    for resultado in buscar_todos(
-        estado,
-        "TenderResult",
-    ):
-        proyecto_adjudicado = buscar_primero(
-            resultado,
-            "AwardedTenderedProject",
-        )
-
-        if proyecto_adjudicado is None:
-            continue
-
-        total_legal = buscar_primero(
-            proyecto_adjudicado,
-            "LegalMonetaryTotal",
-        )
-
-        if total_legal is None:
-            continue
-
-        sin_iva = convertir_importe(
-            texto_primero(
-                total_legal,
-                "TaxExclusiveAmount",
-            )
-        )
-
-        con_iva = convertir_importe(
-            texto_primero(
-                total_legal,
-                "PayableAmount",
-            )
-        )
-
-        if sin_iva > 0:
-            importes_sin_iva.append(sin_iva)
-
-        if con_iva > 0:
-            importes_con_iva.append(con_iva)
-
-    return (
-        sum(importes_sin_iva),
-        sum(importes_con_iva),
+    return texto_hijo_directo(
+        entry,
+        "id",
     )
 
 
-def extraer_licitacion(entry, fuente):
+def extraer_adjudicacion(entry, fuente):
     estado = buscar_primero(
         entry,
         "ContractFolderStatus",
@@ -500,6 +527,9 @@ def extraer_licitacion(entry, fuente):
             "title",
         )
 
+    if not objeto:
+        objeto = "Objeto no informado"
+
     presupuesto = buscar_primero(
         proyecto,
         "BudgetAmount",
@@ -533,38 +563,30 @@ def extraer_licitacion(entry, fuente):
         importe_filtro = presupuesto_sin_iva
         criterio_importe = "Presupuesto base sin IVA"
 
-    # Solo importes estrictamente superiores a 500.000 euros.
     if importe_filtro <= IMPORTE_MINIMO:
         return None
 
-    url = ""
+    adjudicatarios = obtener_adjudicatarios(estado)
 
-    for elemento in list(entry):
-        if nombre_local(elemento) != "link":
-            continue
+    if adjudicatarios:
+        texto_adjudicatarios = ", ".join(adjudicatarios)
+    else:
+        texto_adjudicatarios = "Adjudicatario no informado"
 
-        href = elemento.attrib.get(
-            "href",
-            "",
-        ).strip()
+    (
+        adjudicacion_sin_iva,
+        adjudicacion_con_iva,
+    ) = obtener_importes_adjudicacion(estado)
 
-        rel = elemento.attrib.get(
-            "rel",
-            "",
-        )
+    fecha_adjudicacion = obtener_fecha_adjudicacion(
+        estado
+    )
 
-        if href and rel != "self":
-            url = href
-            break
-
-        if href and not url:
-            url = href
-
-    if not url:
-        url = texto_hijo_directo(
-            entry,
-            "id",
-        )
+    organo = obtener_nombre_organo(estado)
+    tipo_contrato = obtener_tipo_contrato(proyecto)
+    procedimiento = obtener_procedimiento(estado)
+    cpv = obtener_cpv(proyecto)
+    url = obtener_url(entry)
 
     actualizado = texto_hijo_directo(
         entry,
@@ -576,27 +598,9 @@ def extraer_licitacion(entry, fuente):
         "published",
     )
 
-    fecha_publicacion = actualizado or publicado
-    fecha_dt = convertir_fecha_iso(fecha_publicacion)
-
-    organo = obtener_nombre_organo(estado)
-    tipo_contrato = obtener_tipo_contrato(proyecto)
-    procedimiento = obtener_procedimiento(estado)
-    cpv = obtener_cpv(proyecto)
-
-    adjudicatarios = obtener_adjudicatarios(estado)
-
-    if adjudicatarios:
-        texto_adjudicatarios = ", ".join(adjudicatarios)
-    else:
-        texto_adjudicatarios = "Adjudicatario no informado"
-
-    fecha_adjudicacion = obtener_fecha_adjudicacion(estado)
-
-    (
-        adjudicacion_sin_iva,
-        adjudicacion_con_iva,
-    ) = obtener_importes_adjudicacion(estado)
+    fecha_dt = convertir_fecha(
+        actualizado or publicado
+    )
 
     lugar = buscar_primero(
         proyecto,
@@ -625,11 +629,22 @@ def extraer_licitacion(entry, fuente):
         )
 
     guid = hashlib.sha256(
-        identidad.encode("utf-8")
+        f"{VERSION_GUID}|{identidad}".encode("utf-8")
     ).hexdigest()
 
+    titulo = (
+        f"ADJUDICADA ESPAÑA | "
+        f"{texto_adjudicatarios} | "
+        f"{formatear_importe(importe_filtro)} | "
+        f"{objeto}"
+    )
+
+    if len(titulo) > 450:
+        titulo = titulo[:447] + "..."
+
     descripcion = (
-        f"<p><strong>Estado:</strong> ADJUDICADA</p>"
+        f"<p><strong>Estado:</strong> "
+        f"ADJUDICADA ESPAÑA</p>"
         f"<p><strong>Adjudicatario:</strong> "
         f"{html.escape(texto_adjudicatarios)}</p>"
         f"<p><strong>Expediente:</strong> "
@@ -709,24 +724,16 @@ def extraer_licitacion(entry, fuente):
         f"Consultar la adjudicación oficial</a></p>"
     )
 
-    # Orden del título solicitado:
-    # ADJUDICADA | ADJUDICATARIO | IMPORTE | OBJETO
-    titulo = (
-        f"ADJUDICADA | "
-        f"{texto_adjudicatarios} | "
-        f"{formatear_importe(importe_filtro)} | "
-        f"{objeto}"
-    )
-
-    if len(titulo) > 400:
-        titulo = titulo[:397] + "..."
-
     return {
         "id": guid,
+        "version": VERSION_GUID,
+        "clave_expediente": identidad,
         "expediente": expediente,
         "titulo": titulo,
         "objeto": objeto,
         "organo": organo,
+        "adjudicatarios": adjudicatarios,
+        "texto_adjudicatarios": texto_adjudicatarios,
         "valor_estimado": valor_estimado,
         "presupuesto_sin_iva": presupuesto_sin_iva,
         "presupuesto_con_iva": presupuesto_con_iva,
@@ -734,8 +741,6 @@ def extraer_licitacion(entry, fuente):
         "criterio_importe": criterio_importe,
         "adjudicacion_sin_iva": adjudicacion_sin_iva,
         "adjudicacion_con_iva": adjudicacion_con_iva,
-        "adjudicatarios": adjudicatarios,
-        "texto_adjudicatarios": texto_adjudicatarios,
         "fecha_adjudicacion": fecha_adjudicacion,
         "tipo_contrato": tipo_contrato,
         "procedimiento": procedimiento,
@@ -752,7 +757,7 @@ def extraer_licitacion(entry, fuente):
 def descargar_fuente(sesion, fuente):
     url = fuente["url"]
     visitadas = set()
-    licitaciones = []
+    adjudicaciones = []
 
     for numero_pagina in range(
         1,
@@ -788,18 +793,18 @@ def descargar_fuente(sesion, fuente):
         ]
 
         print(
-            f"Entradas encontradas: {len(entradas)}",
+            f"Entradas examinadas: {len(entradas)}",
             flush=True,
         )
 
         for entrada in entradas:
-            licitacion = extraer_licitacion(
+            adjudicacion = extraer_adjudicacion(
                 entrada,
                 fuente["nombre"],
             )
 
-            if licitacion:
-                licitaciones.append(licitacion)
+            if adjudicacion:
+                adjudicaciones.append(adjudicacion)
 
         url = obtener_enlace_siguiente(
             raiz,
@@ -808,12 +813,11 @@ def descargar_fuente(sesion, fuente):
 
     print(
         f'{fuente["nombre"]}: '
-        f"{len(licitaciones)} adjudicaciones superiores "
-        f"a 500.000 €",
+        f"{len(adjudicaciones)} adjudicaciones válidas",
         flush=True,
     )
 
-    return licitaciones
+    return adjudicaciones
 
 
 def cargar_estado():
@@ -845,52 +849,9 @@ def cargar_estado():
     return []
 
 
-def reconstruir_titulo(licitacion):
-    adjudicatarios = licitacion.get(
-        "adjudicatarios",
-        [],
-    )
-
-    if adjudicatarios:
-        texto_adjudicatarios = ", ".join(adjudicatarios)
-    else:
-        texto_adjudicatarios = licitacion.get(
-            "texto_adjudicatarios",
-            "Adjudicatario no informado",
-        )
-
-    importe = float(
-        licitacion.get(
-            "importe_filtro",
-            0,
-        )
-        or 0
-    )
-
-    objeto = licitacion.get(
-        "objeto",
-        "Objeto no informado",
-    )
-
-    titulo = (
-        f"ADJUDICADA | "
-        f"{texto_adjudicatarios} | "
-        f"{formatear_importe(importe)} | "
-        f"{objeto}"
-    )
-
-    if len(titulo) > 400:
-        titulo = titulo[:397] + "..."
-
-    licitacion["titulo"] = titulo
-    licitacion["texto_adjudicatarios"] = texto_adjudicatarios
-
-    return licitacion
-
-
-def combinar_licitaciones(nuevas, anteriores):
+def combinar_adjudicaciones(nuevas, anteriores):
     resultado = []
-    identificadores = set()
+    expedientes_vistos = set()
 
     nuevas.sort(
         key=lambda elemento: elemento.get(
@@ -900,15 +861,18 @@ def combinar_licitaciones(nuevas, anteriores):
         reverse=True,
     )
 
-    for licitacion in nuevas + anteriores:
-        if licitacion.get(
+    for adjudicacion in nuevas + anteriores:
+        if adjudicacion.get(
             "estado",
             "",
         ).upper() != "ADJ":
             continue
 
+        if adjudicacion.get("version") != VERSION_GUID:
+            continue
+
         importe = float(
-            licitacion.get(
+            adjudicacion.get(
                 "importe_filtro",
                 0,
             )
@@ -918,18 +882,30 @@ def combinar_licitaciones(nuevas, anteriores):
         if importe <= IMPORTE_MINIMO:
             continue
 
-        identificador = licitacion.get("id")
+        titulo = adjudicacion.get(
+            "titulo",
+            "",
+        )
 
-        if not identificador:
+        if not titulo.startswith(
+            "ADJUDICADA ESPAÑA |"
+        ):
             continue
 
-        if identificador in identificadores:
+        clave = (
+            adjudicacion.get("clave_expediente")
+            or adjudicacion.get("expediente")
+            or adjudicacion.get("id")
+        )
+
+        if not clave:
             continue
 
-        identificadores.add(identificador)
+        if clave in expedientes_vistos:
+            continue
 
-        licitacion = reconstruir_titulo(licitacion)
-        resultado.append(licitacion)
+        expedientes_vistos.add(clave)
+        resultado.append(adjudicacion)
 
     resultado.sort(
         key=lambda elemento: elemento.get(
@@ -939,18 +915,19 @@ def combinar_licitaciones(nuevas, anteriores):
         reverse=True,
     )
 
-    return resultado[:MAXIMO_LICITACIONES_GUARDADAS]
+    return resultado[:MAXIMO_LICITACIONES]
 
 
-def guardar_estado(licitaciones):
+def guardar_estado(adjudicaciones):
     contenido = {
         "actualizado": datetime.now(
             timezone.utc
         ).isoformat(),
+        "version": VERSION_GUID,
         "filtro_estado": "ADJ",
         "importe_minimo": IMPORTE_MINIMO,
-        "cantidad": len(licitaciones),
-        "licitaciones": licitaciones,
+        "cantidad": len(adjudicaciones),
+        "licitaciones": adjudicaciones,
     }
 
     ARCHIVO_ESTADO.write_text(
@@ -963,7 +940,7 @@ def guardar_estado(licitaciones):
     )
 
 
-def crear_rss(licitaciones):
+def crear_rss(adjudicaciones):
     rss = ET.Element(
         "rss",
         {
@@ -984,7 +961,7 @@ def crear_rss(licitaciones):
         canal,
         "title",
     ).text = (
-        "Adjudicaciones públicas superiores a 500.000 €"
+        "Adjudicaciones España superiores a 500.000 €"
     )
 
     ET.SubElement(
@@ -998,9 +975,9 @@ def crear_rss(licitaciones):
         canal,
         "description",
     ).text = (
-        "Expedientes adjudicados publicados en la Plataforma "
-        "de Contratación del Sector Público con valor estimado "
-        "superior a 500.000 euros."
+        "Adjudicaciones publicadas en la Plataforma de "
+        "Contratación del Sector Público de España con valor "
+        "estimado superior a 500.000 euros."
     )
 
     ET.SubElement(
@@ -1030,22 +1007,11 @@ def crear_rss(licitaciones):
         "atom:link",
     )
 
-    atom_link.set(
-        "href",
-        URL_RSS,
-    )
+    atom_link.set("href", URL_RSS)
+    atom_link.set("rel", "self")
+    atom_link.set("type", "application/rss+xml")
 
-    atom_link.set(
-        "rel",
-        "self",
-    )
-
-    atom_link.set(
-        "type",
-        "application/rss+xml",
-    )
-
-    for licitacion in licitaciones:
+    for adjudicacion in adjudicaciones:
         item = ET.SubElement(
             canal,
             "item",
@@ -1054,12 +1020,12 @@ def crear_rss(licitaciones):
         ET.SubElement(
             item,
             "title",
-        ).text = licitacion["titulo"]
+        ).text = adjudicacion["titulo"]
 
         ET.SubElement(
             item,
             "link",
-        ).text = licitacion["url"]
+        ).text = adjudicacion["url"]
 
         guid = ET.SubElement(
             item,
@@ -1071,10 +1037,10 @@ def crear_rss(licitaciones):
             "false",
         )
 
-        guid.text = licitacion["id"]
+        guid.text = adjudicacion["id"]
 
-        fecha = convertir_fecha_iso(
-            licitacion.get(
+        fecha = convertir_fecha(
+            adjudicacion.get(
                 "fecha_iso",
                 "",
             )
@@ -1088,14 +1054,14 @@ def crear_rss(licitaciones):
         ET.SubElement(
             item,
             "description",
-        ).text = licitacion["descripcion"]
+        ).text = adjudicacion["descripcion"]
 
         contenido = ET.SubElement(
             item,
             "content:encoded",
         )
 
-        contenido.text = licitacion["descripcion"]
+        contenido.text = adjudicacion["descripcion"]
 
     arbol = ET.ElementTree(rss)
     ET.indent(arbol, space="  ")
@@ -1115,12 +1081,13 @@ def main():
 
         for fuente in FUENTES:
             try:
-                resultados = descargar_fuente(
-                    sesion,
-                    fuente,
+                nuevas.extend(
+                    descargar_fuente(
+                        sesion,
+                        fuente,
+                    )
                 )
 
-                nuevas.extend(resultados)
                 fuentes_correctas += 1
 
             except Exception as error:
@@ -1137,17 +1104,17 @@ def main():
 
         anteriores = cargar_estado()
 
-        licitaciones = combinar_licitaciones(
+        adjudicaciones = combinar_adjudicaciones(
             nuevas,
             anteriores,
         )
 
-        guardar_estado(licitaciones)
-        crear_rss(licitaciones)
+        guardar_estado(adjudicaciones)
+        crear_rss(adjudicaciones)
 
         print(
             f"RSS creada correctamente con "
-            f"{len(licitaciones)} adjudicaciones.",
+            f"{len(adjudicaciones)} adjudicaciones.",
             flush=True,
         )
 
