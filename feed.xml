@@ -5,7 +5,7 @@
     <link>https://contrataciondelestado.es/</link>
     <description>Adjudicaciones españolas con fecha oficial, adjudicatario e importe igual o superior a 500.000 euros.</description>
     <language>es-ES</language>
-    <lastBuildDate>Sun, 27 Sep 2026 11:43:51 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 28 Sep 2026 05:17:19 +0000</lastBuildDate>
     <ttl>300</ttl>
     <atom:link href="https://raw.githubusercontent.com/plis2100/rss-licitaciones-500000/main/feed.xml" rel="self" type="application/rss+xml" />
     <item>
