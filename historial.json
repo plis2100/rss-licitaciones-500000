@@ -288,6 +288,18 @@
     "objeto": "Contratación de las obras de reparación de las cubiertas de las naves Fase I y Fase II del recinto Cylog en Ávila"
   },
   {
+    "id": "b6b188ea2b0769fdedde8c67e34a1d011e88c0af262982d7fa49cd0727429a89",
+    "titulo": "ADJUDICADA ESPAÑA | 23/10/2026 | UTE GESEIN – SOLUTIA SDA 25/2022 (U44967503) | 1.514.467,30 € | Suministro de licencias del software SAS VIYA para Analítica Avanzada y Luchas contra el fraude tributario para la Agencia Tributaria Canaria.",
+    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=E%2BI7hKG7vdAUqXM96WStVA%3D%3D",
+    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 23/10/2026</p><p><strong>Adjudicatario:</strong> UTE GESEIN – SOLUTIA SDA 25/2022 (U44967503)</p><p><strong>Importe adjudicado:</strong> 1.514.467,30 €</p><p><strong>Objeto:</strong> Suministro de licencias del software SAS VIYA para Analítica Avanzada y Luchas contra el fraude tributario para la Agencia Tributaria Canaria.</p><p><strong>Expediente:</strong> SDA_SU_26_03</p><p><strong>Órgano de contratación:</strong> Dirección de la Agencia Tributaria Canaria</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=E%2BI7hKG7vdAUqXM96WStVA%3D%3D\">Abrir adjudicación oficial</a></p>",
+    "fecha_adjudicacion": "2026-10-23T02:00:00+02:00",
+    "fecha_publicacion": "2026-10-25T13:12:42.548000+01:00",
+    "expediente": "SDA_SU_26_03",
+    "adjudicatario": "UTE GESEIN – SOLUTIA SDA 25/2022 (U44967503)",
+    "importe": 1514467.3,
+    "objeto": "Suministro de licencias del software SAS VIYA para Analítica Avanzada y Luchas contra el fraude tributario para la Agencia Tributaria Canaria."
+  },
+  {
     "id": "7799e6e5f650cf941e3374d5f2cb262b916cc8057518246278ee5e2477087df2",
     "titulo": "ADJUDICADA ESPAÑA | 22/10/2026 | MEDITERRÁNEO DE OBRAS Y ASFALTOS S.A. (A54403068) | 695.408,74 € | Obras de adaptación viaria en puntos conflictivos de tráfico en el término municipal de Elche.",
     "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=sKArSUUmY%2Bc%2B1TMyIiZmzw%3D%3D",
@@ -1042,6 +1054,66 @@
     "adjudicatario": "CAPROSS 2004 S.L. (B35543974)",
     "importe": 5410001.75,
     "objeto": "Servicio de Limpieza Viaria del municipio de Gáldar"
+  },
+  {
+    "id": "57f287a67e2b7fb9df6843e65988aa6a9f796f7e131c97fc077fe78e29265642",
+    "titulo": "ADJUDICADA ESPAÑA | 22/10/2026 | Indra Soluciones Tecnologías de la Información, S.L.U. (B88018098) | 10.890.000,00 € | Servicios necesarios para la obtención y difusión provisional de los datos del escrutinio de resultados así como otros servicios complementarios (apoyo a las Juntas Electorales, desarrollo de una web del proceso y servicios relativos a los resultados definitivos) con motivo de la celebración de elecciones a Cortes Generales.",
+    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=S%2FC%2FOOVwKSfmnwcj%2BxbdTg%3D%3D",
+    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 22/10/2026</p><p><strong>Adjudicatario:</strong> Indra Soluciones Tecnologías de la Información, S.L.U. (B88018098)</p><p><strong>Importe adjudicado:</strong> 10.890.000,00 €</p><p><strong>Objeto:</strong> Servicios necesarios para la obtención y difusión provisional de los datos del escrutinio de resultados así como otros servicios complementarios (apoyo a las Juntas Electorales, desarrollo de una web del proceso y servicios relativos a los resultados definitivos) con motivo de la celebración de elecciones a Cortes Generales.</p><p><strong>Expediente:</strong> ECG/11/2026</p><p><strong>Órgano de contratación:</strong> Dirección General de Política Interior</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=S%2FC%2FOOVwKSfmnwcj%2BxbdTg%3D%3D\">Abrir adjudicación oficial</a></p>",
+    "fecha_adjudicacion": "2026-10-22T02:00:00+02:00",
+    "fecha_publicacion": "2026-10-25T09:16:29.843000+01:00",
+    "expediente": "ECG/11/2026",
+    "adjudicatario": "Indra Soluciones Tecnologías de la Información, S.L.U. (B88018098)",
+    "importe": 10890000.0,
+    "objeto": "Servicios necesarios para la obtención y difusión provisional de los datos del escrutinio de resultados así como otros servicios complementarios (apoyo a las Juntas Electorales, desarrollo de una web del proceso y servicios relativos a los resultados definitivos) con motivo de la celebración de elecciones a Cortes Generales."
+  },
+  {
+    "id": "5bddd6ad36a9dd5a9e595b63b232ab996904fc3f2b6c4d9379e1fe3f8b684653",
+    "titulo": "ADJUDICADA ESPAÑA | 22/10/2026 | Netcheck, S.A. (A82904574) | 556.320,16 € | Sda 26/2021 Servicio De Soporte Y Mantenimiento Del Sistema Nutria, Para La Tramitación De Ayudas Públicas (Ministerio Para La Transformación Digital Y De La Función Pública-Subsecretaria Para La Transformacion Digital Y De La Funcion Publica)",
+    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=K7moZy8c6Xfs%2BnLj3vAg5A%3D%3D",
+    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 22/10/2026</p><p><strong>Adjudicatario:</strong> Netcheck, S.A. (A82904574)</p><p><strong>Importe adjudicado:</strong> 556.320,16 €</p><p><strong>Objeto:</strong> Sda 26/2021 Servicio De Soporte Y Mantenimiento Del Sistema Nutria, Para La Tramitación De Ayudas Públicas (Ministerio Para La Transformación Digital Y De La Función Pública-Subsecretaria Para La Transformacion Digital Y De La Funcion Publica)</p><p><strong>Expediente:</strong> CEA4715/2026</p><p><strong>Órgano de contratación:</strong> Dirección General de Racionalización y Centralización de la Contratación-Junta de Contratación Centralizada</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=K7moZy8c6Xfs%2BnLj3vAg5A%3D%3D\">Abrir adjudicación oficial</a></p>",
+    "fecha_adjudicacion": "2026-10-22T02:00:00+02:00",
+    "fecha_publicacion": "2026-10-25T07:12:17.777000+01:00",
+    "expediente": "CEA4715/2026",
+    "adjudicatario": "Netcheck, S.A. (A82904574)",
+    "importe": 556320.16,
+    "objeto": "Sda 26/2021 Servicio De Soporte Y Mantenimiento Del Sistema Nutria, Para La Tramitación De Ayudas Públicas (Ministerio Para La Transformación Digital Y De La Función Pública-Subsecretaria Para La Transformacion Digital Y De La Funcion Publica)"
+  },
+  {
+    "id": "868e711e25c64364660f8b43a414fdb93bd84f235347208a39c95ac92d9c2737",
+    "titulo": "ADJUDICADA ESPAÑA | 22/10/2026 | Inetum España, S.A. (A28855260) | 720.980,28 € | Suministro De Hsms Hardware Security Modules Para La Infraestructura De Clave Pública Pki-I3d Del Ministerio De Defensa (Ministerio De Defensa-Subdirección General De Contratación De Tecnologías De La Información Y De Las Comunicaciones (Tic))",
+    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=vZM5Ej9pq0cZDGvgaZEVxQ%3D%3D",
+    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 22/10/2026</p><p><strong>Adjudicatario:</strong> Inetum España, S.A. (A28855260)</p><p><strong>Importe adjudicado:</strong> 720.980,28 €</p><p><strong>Objeto:</strong> Suministro De Hsms Hardware Security Modules Para La Infraestructura De Clave Pública Pki-I3d Del Ministerio De Defensa (Ministerio De Defensa-Subdirección General De Contratación De Tecnologías De La Información Y De Las Comunicaciones (Tic))</p><p><strong>Expediente:</strong> CEA4756/2026</p><p><strong>Órgano de contratación:</strong> Dirección General de Racionalización y Centralización de la Contratación-Junta de Contratación Centralizada</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=vZM5Ej9pq0cZDGvgaZEVxQ%3D%3D\">Abrir adjudicación oficial</a></p>",
+    "fecha_adjudicacion": "2026-10-22T02:00:00+02:00",
+    "fecha_publicacion": "2026-10-25T07:12:15.281000+01:00",
+    "expediente": "CEA4756/2026",
+    "adjudicatario": "Inetum España, S.A. (A28855260)",
+    "importe": 720980.28,
+    "objeto": "Suministro De Hsms Hardware Security Modules Para La Infraestructura De Clave Pública Pki-I3d Del Ministerio De Defensa (Ministerio De Defensa-Subdirección General De Contratación De Tecnologías De La Información Y De Las Comunicaciones (Tic))"
+  },
+  {
+    "id": "7f64babe69817d7556e5ca185c3d3daa37558b1e670a7b6ea50a7f0a4d92988d",
+    "titulo": "ADJUDICADA ESPAÑA | 22/10/2026 | Ntt Data Spain, S.L.U. (B82387770) | 655.215,00 € | Contrato Específico Del Sistema Dinámico De Adquisición (Sda 26/2021) Para Los Servicios De Desarrollo De Sistemas De Administración Electrónica. Migración Y Mantenimiento De Las Aplicaciones De Wsl Y Fsl (Ministerio De Transportes Y Movilidad Sostenible-Administrador De Infraestructuras Ferroviarias (Adif))",
+    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=0QLf0KErB%2Bf9pbnDwlaUlg%3D%3D",
+    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 22/10/2026</p><p><strong>Adjudicatario:</strong> Ntt Data Spain, S.L.U. (B82387770)</p><p><strong>Importe adjudicado:</strong> 655.215,00 €</p><p><strong>Objeto:</strong> Contrato Específico Del Sistema Dinámico De Adquisición (Sda 26/2021) Para Los Servicios De Desarrollo De Sistemas De Administración Electrónica. Migración Y Mantenimiento De Las Aplicaciones De Wsl Y Fsl (Ministerio De Transportes Y Movilidad Sostenible-Administrador De Infraestructuras Ferroviarias (Adif))</p><p><strong>Expediente:</strong> CEA4845/2026</p><p><strong>Órgano de contratación:</strong> Dirección General de Racionalización y Centralización de la Contratación-Junta de Contratación Centralizada</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=0QLf0KErB%2Bf9pbnDwlaUlg%3D%3D\">Abrir adjudicación oficial</a></p>",
+    "fecha_adjudicacion": "2026-10-22T02:00:00+02:00",
+    "fecha_publicacion": "2026-10-25T07:12:01.209000+01:00",
+    "expediente": "CEA4845/2026",
+    "adjudicatario": "Ntt Data Spain, S.L.U. (B82387770)",
+    "importe": 655215.0,
+    "objeto": "Contrato Específico Del Sistema Dinámico De Adquisición (Sda 26/2021) Para Los Servicios De Desarrollo De Sistemas De Administración Electrónica. Migración Y Mantenimiento De Las Aplicaciones De Wsl Y Fsl (Ministerio De Transportes Y Movilidad Sostenible-Administrador De Infraestructuras Ferroviarias (Adif))"
+  },
+  {
+    "id": "d2b192cb15b68ae7f4cf632ed79f70d25848606d158c810b3a225df6ea255d42",
+    "titulo": "ADJUDICADA ESPAÑA | 22/10/2026 | Babel Sistemas De Información, S.L.U. (B83603191) | 788.920,00 € | Renovación, Aumento Y Soporte Técnico De Las Suscripciones Del Software De Modelado De Procesos En Explotación En La Infraestructura Integral De Información Para La Defensa (I3d) 2026 (Ministerio De Defensa-Subdirección General De Contratación De Tecnologías De La Información Y De Las Comunicaciones (Tic))",
+    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ExJRWeDqiVeP66GS%2BONYvQ%3D%3D",
+    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 22/10/2026</p><p><strong>Adjudicatario:</strong> Babel Sistemas De Información, S.L.U. (B83603191)</p><p><strong>Importe adjudicado:</strong> 788.920,00 €</p><p><strong>Objeto:</strong> Renovación, Aumento Y Soporte Técnico De Las Suscripciones Del Software De Modelado De Procesos En Explotación En La Infraestructura Integral De Información Para La Defensa (I3d) 2026 (Ministerio De Defensa-Subdirección General De Contratación De Tecnologías De La Información Y De Las Comunicaciones (Tic))</p><p><strong>Expediente:</strong> CEA4760/2026</p><p><strong>Órgano de contratación:</strong> Dirección General de Racionalización y Centralización de la Contratación-Junta de Contratación Centralizada</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=ExJRWeDqiVeP66GS%2BONYvQ%3D%3D\">Abrir adjudicación oficial</a></p>",
+    "fecha_adjudicacion": "2026-10-22T02:00:00+02:00",
+    "fecha_publicacion": "2026-10-25T07:11:58.590000+01:00",
+    "expediente": "CEA4760/2026",
+    "adjudicatario": "Babel Sistemas De Información, S.L.U. (B83603191)",
+    "importe": 788920.0,
+    "objeto": "Renovación, Aumento Y Soporte Técnico De Las Suscripciones Del Software De Modelado De Procesos En Explotación En La Infraestructura Integral De Información Para La Defensa (I3d) 2026 (Ministerio De Defensa-Subdirección General De Contratación De Tecnologías De La Información Y De Las Comunicaciones (Tic))"
   },
   {
     "id": "5c8ec78ac0da0d3c9f2e6f49ea6381306576fffb37f97309ff90c158a5236597",
@@ -5926,77 +5998,5 @@
     "adjudicatario": "Saitec SA (A48264725)",
     "importe": 969560.14,
     "objeto": "Servicios de asistencia técnica para el control de las obras de adecuación de las instalaciones de seguridad en la nueva vía de apartado de 750 metros de la estación de Corrales de Buelna y renovación de los enclavamientos en las estaciones de las Fraguas y Bárcena. Línea 160 Palencia – Santander"
-  },
-  {
-    "id": "a8d7e94c5e89b3c83542ad58c6b402ca293f016b915d4e0df21ec2d35dc2d45b",
-    "titulo": "ADJUDICADA ESPAÑA | 06/10/2026 | ACTREN, MANTENIMIENTO FERROVIARIO,S.A. (A84857903) | 502.118,54 € | Servicio de reparacion general de bogies de trenes serie 594",
-    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=66zPZ%2Fi%2BDqNWhbmkna2nXQ%3D%3D",
-    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 06/10/2026</p><p><strong>Adjudicatario:</strong> ACTREN, MANTENIMIENTO FERROVIARIO,S.A. (A84857903)</p><p><strong>Importe adjudicado:</strong> 502.118,54 €</p><p><strong>Objeto:</strong> Servicio de reparacion general de bogies de trenes serie 594</p><p><strong>Expediente:</strong> 2026-00110</p><p><strong>Órgano de contratación:</strong> Dirección General de Renfe Ingeniería y Mantenimiento Sociedad Mercantil Estatal, S.A.</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=66zPZ%2Fi%2BDqNWhbmkna2nXQ%3D%3D\">Abrir adjudicación oficial</a></p>",
-    "fecha_adjudicacion": "2026-10-06T02:00:00+02:00",
-    "fecha_publicacion": "2026-10-13T13:18:00.258000+02:00",
-    "expediente": "2026-00110",
-    "adjudicatario": "ACTREN, MANTENIMIENTO FERROVIARIO,S.A. (A84857903)",
-    "importe": 502118.54,
-    "objeto": "Servicio de reparacion general de bogies de trenes serie 594"
-  },
-  {
-    "id": "ac065b2367ffffaf1e6194d60e9bc16a6d515a8fee34f84bbbf754d60d898379",
-    "titulo": "ADJUDICADA ESPAÑA | 06/10/2026 | SERVICIOS, ESTUDIOS, OBRAS Y MANTENIMIENTOS S.L. (B98006661) | 2.077.171,79 € | Las obras propuestas persiguen la captación, desvío y vertido al barranco del Pozalet previa laminación en balsas, de las aguas generadas en una cuenca hidrológica identificada al norte del núcleo urbano de Loriguilla, y que, en las condiciones actuales, previas a la actuación propuesta, atraviesan parte del municipio. ACTUACIÓN FINANCIADA POR MINISTERIO TMD (MUNICIPIOS AFECTADOS DANA).",
-    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=YmdCOi9L%2BOGGCFcHcNGIlQ%3D%3D",
-    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 06/10/2026</p><p><strong>Adjudicatario:</strong> SERVICIOS, ESTUDIOS, OBRAS Y MANTENIMIENTOS S.L. (B98006661)</p><p><strong>Importe adjudicado:</strong> 2.077.171,79 €</p><p><strong>Objeto:</strong> Las obras propuestas persiguen la captación, desvío y vertido al barranco del Pozalet previa laminación en balsas, de las aguas generadas en una cuenca hidrológica identificada al norte del núcleo urbano de Loriguilla, y que, en las condiciones actuales, previas a la actuación propuesta, atraviesan parte del municipio. ACTUACIÓN FINANCIADA POR MINISTERIO TMD (MUNICIPIOS AFECTADOS DANA).</p><p><strong>Expediente:</strong> 1196/2026.- BALSAS LAMINACIÓN TMD- DANA</p><p><strong>Órgano de contratación:</strong> Ayuntamiento de Loriguilla</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=YmdCOi9L%2BOGGCFcHcNGIlQ%3D%3D\">Abrir adjudicación oficial</a></p>",
-    "fecha_adjudicacion": "2026-10-06T02:00:00+02:00",
-    "fecha_publicacion": "2026-10-15T08:36:18.847000+02:00",
-    "expediente": "1196/2026.- BALSAS LAMINACIÓN TMD- DANA",
-    "adjudicatario": "SERVICIOS, ESTUDIOS, OBRAS Y MANTENIMIENTOS S.L. (B98006661)",
-    "importe": 2077171.79,
-    "objeto": "Las obras propuestas persiguen la captación, desvío y vertido al barranco del Pozalet previa laminación en balsas, de las aguas generadas en una cuenca hidrológica identificada al norte del núcleo urbano de Loriguilla, y que, en las condiciones actuales, previas a la actuación propuesta, atraviesan parte del municipio. ACTUACIÓN FINANCIADA POR MINISTERIO TMD (MUNICIPIOS AFECTADOS DANA)."
-  },
-  {
-    "id": "ab77c806397ad57da0feb3867a62cd89079261df58878cfb07b07725214c14e6",
-    "titulo": "ADJUDICADA ESPAÑA | 06/10/2026 | GRUPO LINCE ASPRONA S.L.U. (B47468319) | 673.372,10 € | Contrato de servicios de mantenimiento de jardines y zonas verdes dependientes de Laguna de Duero, de retirada de hierbas indeseadas y suministro de arbolado y flor de temporada",
-    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=ejskXbub2W7%2Fa9DgO%2BoYKQ%3D%3D",
-    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 06/10/2026</p><p><strong>Adjudicatario:</strong> GRUPO LINCE ASPRONA S.L.U. (B47468319)</p><p><strong>Importe adjudicado:</strong> 673.372,10 €</p><p><strong>Objeto:</strong> Contrato de servicios de mantenimiento de jardines y zonas verdes dependientes de Laguna de Duero, de retirada de hierbas indeseadas y suministro de arbolado y flor de temporada</p><p><strong>Expediente:</strong> 13028/2025</p><p><strong>Órgano de contratación:</strong> Alcaldía del Ayuntamiento de Laguna de Duero</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=ejskXbub2W7%2Fa9DgO%2BoYKQ%3D%3D\">Abrir adjudicación oficial</a></p>",
-    "fecha_adjudicacion": "2026-10-06T02:00:00+02:00",
-    "fecha_publicacion": "2026-10-15T08:27:14.662000+02:00",
-    "expediente": "13028/2025",
-    "adjudicatario": "GRUPO LINCE ASPRONA S.L.U. (B47468319)",
-    "importe": 673372.1,
-    "objeto": "Contrato de servicios de mantenimiento de jardines y zonas verdes dependientes de Laguna de Duero, de retirada de hierbas indeseadas y suministro de arbolado y flor de temporada"
-  },
-  {
-    "id": "7d77939e6390b981769baf5c63432ed82394932b8af5dac39d522d439b0bc3f4",
-    "titulo": "ADJUDICADA ESPAÑA | 06/10/2026 | LIMPIEZAS CRESPO S.A. (A28396604) | 3.509.000,00 € | La contratación de los servicios de limpieza de los inmuebles, dependencias, muebles, cristales y espacios interiores y exteriores de todo tipo en los centros educativos de Móstoles.",
-    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=2aEZaixp1%2F3i0Kd8%2Brcp6w%3D%3D",
-    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 06/10/2026</p><p><strong>Adjudicatario:</strong> LIMPIEZAS CRESPO S.A. (A28396604)</p><p><strong>Importe adjudicado:</strong> 3.509.000,00 €</p><p><strong>Objeto:</strong> La contratación de los servicios de limpieza de los inmuebles, dependencias, muebles, cristales y espacios interiores y exteriores de todo tipo en los centros educativos de Móstoles.</p><p><strong>Expediente:</strong> C/050/CON/2025-327</p><p><strong>Órgano de contratación:</strong> Junta de Gobierno del Ayuntamiento de Móstoles</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=2aEZaixp1%2F3i0Kd8%2Brcp6w%3D%3D\">Abrir adjudicación oficial</a></p>",
-    "fecha_adjudicacion": "2026-10-06T02:00:00+02:00",
-    "fecha_publicacion": "2026-10-14T14:08:08.933000+02:00",
-    "expediente": "C/050/CON/2025-327",
-    "adjudicatario": "LIMPIEZAS CRESPO S.A. (A28396604)",
-    "importe": 3509000.0,
-    "objeto": "La contratación de los servicios de limpieza de los inmuebles, dependencias, muebles, cristales y espacios interiores y exteriores de todo tipo en los centros educativos de Móstoles."
-  },
-  {
-    "id": "4da08dbbe6960c286fd44f3cce34fe9dfa7334abb12694abbad93d4471885302",
-    "titulo": "ADJUDICADA ESPAÑA | 06/10/2026 | LIMPIEZAS CRESPO S.A. (A28396604) | 3.327.500,00 € | La contratación de los servicios de limpieza de los inmuebles, dependencias, muebles, cristales y espacios interiores y exteriores de todo tipo en los centros educativos de Móstoles.",
-    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=2aEZaixp1%2F3i0Kd8%2Brcp6w%3D%3D",
-    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 06/10/2026</p><p><strong>Adjudicatario:</strong> LIMPIEZAS CRESPO S.A. (A28396604)</p><p><strong>Importe adjudicado:</strong> 3.327.500,00 €</p><p><strong>Objeto:</strong> La contratación de los servicios de limpieza de los inmuebles, dependencias, muebles, cristales y espacios interiores y exteriores de todo tipo en los centros educativos de Móstoles.</p><p><strong>Expediente:</strong> C/050/CON/2025-327</p><p><strong>Órgano de contratación:</strong> Junta de Gobierno del Ayuntamiento de Móstoles</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=2aEZaixp1%2F3i0Kd8%2Brcp6w%3D%3D\">Abrir adjudicación oficial</a></p>",
-    "fecha_adjudicacion": "2026-10-06T02:00:00+02:00",
-    "fecha_publicacion": "2026-10-14T14:08:08.933000+02:00",
-    "expediente": "C/050/CON/2025-327",
-    "adjudicatario": "LIMPIEZAS CRESPO S.A. (A28396604)",
-    "importe": 3327500.0,
-    "objeto": "La contratación de los servicios de limpieza de los inmuebles, dependencias, muebles, cristales y espacios interiores y exteriores de todo tipo en los centros educativos de Móstoles."
-  },
-  {
-    "id": "fd479ebc8aa3dbe2fdc95b6e1ea2ee6c154b14a204d324d131515cb6963eb7c0",
-    "titulo": "ADJUDICADA ESPAÑA | 06/10/2026 | CONSTRUCCIONES ESTEVEZ MENA S.L. (B74130956) | 1.819.823,34 € | Obras de mejora de la accesibilidad de la estacion de pravia, asturias (cercanias de a.m. de asturias)",
-    "url": "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=3HBB5fAZaw6OUi78BmzhOQ%3D%3D",
-    "descripcion": "<p><strong>Estado:</strong> ADJUDICADA ESPAÑA</p><p><strong>Fecha de adjudicación:</strong> 06/10/2026</p><p><strong>Adjudicatario:</strong> CONSTRUCCIONES ESTEVEZ MENA S.L. (B74130956)</p><p><strong>Importe adjudicado:</strong> 1.819.823,34 €</p><p><strong>Objeto:</strong> Obras de mejora de la accesibilidad de la estacion de pravia, asturias (cercanias de a.m. de asturias)</p><p><strong>Expediente:</strong> 2025-04333</p><p><strong>Órgano de contratación:</strong> Dirección General de Renfe Viajeros Sociedad Mercantil Estatal, S.A.</p><p><a href=\"https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&amp;idEvl=3HBB5fAZaw6OUi78BmzhOQ%3D%3D\">Abrir adjudicación oficial</a></p>",
-    "fecha_adjudicacion": "2026-10-06T02:00:00+02:00",
-    "fecha_publicacion": "2026-10-14T11:25:18.682000+02:00",
-    "expediente": "2025-04333",
-    "adjudicatario": "CONSTRUCCIONES ESTEVEZ MENA S.L. (B74130956)",
-    "importe": 1819823.34,
-    "objeto": "Obras de mejora de la accesibilidad de la estacion de pravia, asturias (cercanias de a.m. de asturias)"
   }
 ]
