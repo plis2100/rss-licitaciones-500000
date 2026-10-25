@@ -4,7 +4,7 @@ import json
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from email.utils import format_datetime
 from pathlib import Path
 from urllib.parse import urljoin
@@ -33,10 +33,12 @@ URL_PLACSP = (
 
 ARCHIVO_RSS = Path("feed.xml")
 ARCHIVO_HISTORIAL = Path("historial.json")
+ARCHIVO_ESTADO = Path("estado.json")
 
 IMPORTE_MINIMO = 500_000.00
 MAXIMO_PAGINAS = 12
 MAXIMO_ENTRADAS_RSS = 500
+DIAS_MAXIMOS_ANTIGUEDAD = 3  # Cambia a 1, 2, 3 o 7 si lo deseas
 
 TIMEOUT_CONEXION = 15
 TIMEOUT_LECTURA = 50
@@ -524,7 +526,7 @@ def obtener_fecha_publicacion(entrada):
                 if fecha:
                     return fecha
 
-    return datetime.now(timezone.utc)
+    return None
 
 
 # ============================================================
@@ -872,7 +874,9 @@ def mezclar_noticias(nuevas, anteriores):
             noticias_por_id[identificador] = noticia
 
     for noticia in nuevas:
-        noticias_por_id[noticia["id"]] = noticia
+        identificador = noticia["id"]
+        if identificador not in noticias_por_id:
+            noticias_por_id[identificador] = noticia
 
     resultado = list(noticias_por_id.values())
 
@@ -893,6 +897,16 @@ def mezclar_noticias(nuevas, anteriores):
 # ============================================================
 
 def crear_rss(noticias):
+    # Solo mostrar adjudicaciones recientes en Feedly.
+    # El historial completo se conserva por separado para evitar duplicados.
+    hoy = datetime.now(ZONA_HORARIA).date()
+    limite = hoy - timedelta(days=DIAS_MAXIMOS_ANTIGUEDAD)
+    noticias = [
+        noticia for noticia in noticias
+        if (fecha := convertir_fecha(noticia.get("fecha_adjudicacion")))
+        and limite <= fecha.astimezone(ZONA_HORARIA).date() <= hoy
+    ]
+    print(f"Entradas recientes publicadas en RSS: {len(noticias)}")
     # Esta instrucción añade automáticamente xmlns:atom.
     ET.register_namespace(
         "atom",
@@ -1069,6 +1083,8 @@ def main():
         anteriores,
     )
 
+    # Conservar la fecha y los datos originales de las entradas ya publicadas.
+    # Evitar reescribir el feed cuando no hay cambios reales.
     guardar_historial(resultado)
     crear_rss(resultado)
 
