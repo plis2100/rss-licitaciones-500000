@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from email.utils import format_datetime
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree as ET
 from zoneinfo import ZoneInfo
 
@@ -26,19 +26,19 @@ URL_RSS = (
     f"{USUARIO_GITHUB}/{REPOSITORIO_GITHUB}/main/feed.xml"
 )
 
-URL_PLACSP = (
-    "https://contrataciondelestado.es/sindicacion/"
-    "sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom"
+URL_PLACSP = "https://contrataciondelsectorpublico.gob.es/"
+FUENTES = (
+    ("Perfiles alojados", urljoin(URL_PLACSP, "sindicacion/sindicacion_643/"
+                                  "licitacionesPerfilesContratanteCompleto3.atom")),
+    ("Plataformas agregadas", urljoin(URL_PLACSP, "sindicacion/sindicacion_1044/"
+                                     "PlataformasAgregadasSinMenores.atom")),
 )
 
 ARCHIVO_RSS = Path("feed.xml")
 ARCHIVO_HISTORIAL = Path("historial.json")
-ARCHIVO_ESTADO = Path("estado.json")
 
 IMPORTE_MINIMO = 500_000.00
-MAXIMO_PAGINAS = 12
-MAXIMO_ENTRADAS_RSS = 500
-DIAS_MAXIMOS_ANTIGUEDAD = 3  # Cambia a 1, 2, 3 o 7 si lo deseas
+DIAS_RSS = 7
 
 TIMEOUT_CONEXION = 15
 TIMEOUT_LECTURA = 50
@@ -300,115 +300,41 @@ def obtener_url_siguiente(raiz, url_actual):
         )
 
         if href:
-            return urljoin(url_actual, href)
+            url = urlsplit(urljoin(url_actual, href))
+            if url.hostname == "contrataciondelestado.es":
+                url = url._replace(scheme="https", netloc="contrataciondelsectorpublico.gob.es")
+            return url.geturl()
 
     return None
 
 
-def descargar_entradas():
-    entradas = []
-    url = URL_PLACSP
-    visitadas = set()
+def descargar_entradas(limite):
+    for fuente, url in FUENTES:
+        visitadas = set()
+        cantidad = 0
+        while url:
+            if url in visitadas:
+                raise RuntimeError(f"Paginación circular en {fuente}: {url}")
+            visitadas.add(url)
+            raiz = ET.fromstring(descargar_xml(url))
+            if raiz.tag != "{http://www.w3.org/2005/Atom}feed":
+                raise RuntimeError(f"{fuente} no devolvió un feed Atom: {url}")
 
-    for pagina in range(1, MAXIMO_PAGINAS + 1):
-        if not url or url in visitadas:
-            break
+            fechas = []
+            for entrada in raiz.findall("{http://www.w3.org/2005/Atom}entry"):
+                fecha = convertir_fecha(entrada.findtext("{http://www.w3.org/2005/Atom}updated"))
+                if fecha:
+                    fechas.append(fecha)
+                    if fecha < limite:
+                        continue
+                cantidad += 1
+                yield entrada
 
-        visitadas.add(url)
-
-        print(
-            f"Procesando página "
-            f"{pagina}/{MAXIMO_PAGINAS}"
-        )
-
-        contenido = descargar_xml(url)
-
-        try:
-            raiz = ET.fromstring(contenido)
-
-        except ET.ParseError as error:
-            raise RuntimeError(
-                "PLACSP no devolvió un XML válido: "
-                f"{error}"
-            ) from error
-
-        entradas_pagina = [
-            elemento
-            for elemento in raiz.iter()
-            if nombre_local(elemento) == "entry"
-        ]
-
-        entradas.extend(entradas_pagina)
-
-        print(
-            f"Entradas de esta página: "
-            f"{len(entradas_pagina)}"
-        )
-
-        siguiente = obtener_url_siguiente(
-            raiz,
-            url,
-        )
-
-        if not siguiente:
-            break
-
-        url = siguiente
-
-    print(
-        f"Total de entradas descargadas: "
-        f"{len(entradas)}"
-    )
-
-    return entradas
-
-
-# ============================================================
-# DATOS DE LA LICITACIÓN
-# ============================================================
-
-def obtener_estado(entrada):
-    for nombre in (
-        "ContractFolderStatusCode",
-        "TenderResultCode",
-        "ResultCode",
-    ):
-        for elemento in buscar_descendientes(
-            entrada,
-            nombre,
-        ):
-            valor = texto_elemento(
-                elemento
-            ).upper()
-
-            if valor:
-                return valor
-
-    return ""
-
-
-def esta_adjudicada(entrada):
-    estado = obtener_estado(entrada)
-
-    if estado in {
-        "ADJ",
-        "ADJUDICADA",
-        "AWARDED",
-        "RESOLVED",
-    }:
-        return True
-
-    for resultado in buscar_descendientes(
-        entrada,
-        "TenderResult",
-    ):
-        if buscar_descendiente(
-            resultado,
-            "AwardDate",
-        ) is not None:
-            return True
-
-    return False
+            # Atom ordena las páginas de la actualización más reciente a la más antigua.
+            if fechas and min(fechas) < limite:
+                break
+            url = obtener_url_siguiente(raiz, url)
+        print(f"{fuente}: {cantidad} entradas en {len(visitadas)} páginas")
 
 
 def obtener_expediente(entrada):
@@ -475,7 +401,7 @@ def obtener_organo(entrada):
 def obtener_url_licitacion(entrada):
     enlace_alternativo = ""
 
-    for elemento in entrada.iter():
+    for elemento in entrada:
         if nombre_local(elemento) != "link":
             continue
 
@@ -499,7 +425,7 @@ def obtener_url_licitacion(entrada):
         if "detalle_licitacion" in url:
             return url
 
-        if relacion == "alternate":
+        if relacion in {"", "alternate"}:
             enlace_alternativo = url
 
         elif "text/html" in tipo:
@@ -513,8 +439,8 @@ def obtener_url_licitacion(entrada):
 
 def obtener_fecha_publicacion(entrada):
     for nombre in (
-        "published",
         "updated",
+        "published",
         "IssueDate",
     ):
         for elemento in entrada.iter():
@@ -586,7 +512,7 @@ def obtener_adjudicatario(resultado):
 
     adjudicatarios = []
 
-    for posicion, nombre in enumerate(nombres[:5]):
+    for posicion, nombre in enumerate(nombres):
         texto = nombre
 
         if posicion < len(identificadores):
@@ -610,7 +536,6 @@ def obtener_importe_resultado(resultado):
         "TaxExclusiveAmount",
         "TotalAmount",
         "AwardedAmount",
-        "EstimatedOverallContractAmount",
     )
 
     for nombre in prioridades:
@@ -684,39 +609,32 @@ def obtener_resultados_validos(entrada):
             )
         )
 
-        if not adjudicatario:
+        codigo = buscar_descendiente(resultado, ["ResultCode", "TenderResultCode"])
+        estado = texto_elemento(codigo).upper()
+        if estado and estado not in {
+            "8", "9", "ADJ", "ADJUDICADO", "ADJUDICADA",
+            "FORMALIZADO", "FORMALIZADA", "AWARDED",
+        }:
             continue
-
-        if importe is None:
+        if not estado and not adjudicatario:
             continue
-
-        if importe < IMPORTE_MINIMO:
-            continue
-
-        # No usamos la fecha de publicación como si fuera
-        # la fecha de adjudicación.
-        if fecha_adjudicacion is None:
-            print(
-                "Descartada adjudicación sin "
-                "fecha oficial."
-            )
+        if importe is None or importe < IMPORTE_MINIMO:
             continue
 
         validos.append(
             {
-                "adjudicatario": adjudicatario,
+                "adjudicatario": adjudicatario or "Adjudicatario no publicado",
                 "importe": importe,
                 "fecha": fecha_adjudicacion,
+                "lote": texto_descendiente(resultado, "ProcurementProjectLotID") or
+                        texto_descendiente(buscar_descendiente(resultado, "AwardedTenderedProject"), "ID"),
             }
         )
 
     return validos
 
 
-def convertir_entrada(entrada):
-    if not esta_adjudicada(entrada):
-        return []
-
+def convertir_entrada(entrada, detectada):
     expediente = obtener_expediente(entrada)
     objeto = obtener_objeto(entrada)
     organo = obtener_organo(entrada)
@@ -737,7 +655,9 @@ def convertir_entrada(entrada):
         importe = resultado["importe"]
         fecha = resultado["fecha"]
 
-        fecha_texto = formatear_fecha(fecha)
+        fecha_texto = formatear_fecha(fecha) or "Fecha de adjudicación no publicada"
+        lote = resultado["lote"]
+        objeto_resultado = f"{objeto} (lote {lote})" if lote else objeto
         importe_texto = formatear_importe(importe)
 
         titulo = (
@@ -745,7 +665,7 @@ def convertir_entrada(entrada):
             f"{fecha_texto} | "
             f"{adjudicatario} | "
             f"{importe_texto} | "
-            f"{objeto}"
+            f"{objeto_resultado}"
         )
 
         descripcion = [
@@ -769,7 +689,7 @@ def convertir_entrada(entrada):
             ),
             (
                 "<p><strong>Objeto:</strong> "
-                f"{html.escape(objeto)}</p>"
+                f"{html.escape(objeto_resultado)}</p>"
             ),
             (
                 "<p><strong>Expediente:</strong> "
@@ -806,14 +726,19 @@ def convertir_entrada(entrada):
             texto_identificador.encode("utf-8")
         ).hexdigest()
 
+        # Identificar cada lote y expediente aunque coincidan fecha, ganador e importe.
+        identidad_expediente = entrada.findtext("{http://www.w3.org/2005/Atom}id") or f"{organo}|{expediente}"
+        clave = f"{identidad_expediente}|{lote}|{adjudicatario.casefold()}"
         noticias.append(
             {
-                "id": identificador,
+                "id": hashlib.sha256(clave.encode("utf-8")).hexdigest(),
+                "id_anterior": identificador,
+                "detectada": detectada.isoformat(),
                 "titulo": titulo,
                 "url": url,
                 "descripcion": "".join(descripcion),
-                "fecha_adjudicacion": fecha.isoformat(),
-                "fecha_publicacion": fecha_publicacion.isoformat(),
+                "fecha_adjudicacion": fecha.isoformat() if fecha else None,
+                "fecha_publicacion": fecha_publicacion.isoformat() if fecha_publicacion else None,
                 "expediente": expediente,
                 "adjudicatario": adjudicatario,
                 "importe": importe,
@@ -856,7 +781,7 @@ def cargar_historial():
 def guardar_historial(noticias):
     ARCHIVO_HISTORIAL.write_text(
         json.dumps(
-            noticias[:MAXIMO_ENTRADAS_RSS],
+            noticias,
             ensure_ascii=False,
             indent=2,
         ),
@@ -864,48 +789,47 @@ def guardar_historial(noticias):
     )
 
 
-def mezclar_noticias(nuevas, anteriores):
-    noticias_por_id = {}
-
-    for noticia in anteriores:
-        identificador = noticia.get("id")
-
-        if identificador:
-            noticias_por_id[identificador] = noticia
-
-    for noticia in nuevas:
-        identificador = noticia["id"]
-        if identificador not in noticias_por_id:
-            noticias_por_id[identificador] = noticia
-
-    resultado = list(noticias_por_id.values())
-
-    resultado.sort(
-        key=lambda noticia: (
-            noticia.get("fecha_adjudicacion")
-            or noticia.get("fecha_publicacion")
-            or ""
-        ),
-        reverse=True,
+def fecha_rss_noticia(noticia):
+    return convertir_fecha(
+        noticia.get("detectada")
+        or noticia.get("fecha_adjudicacion")
+        or noticia.get("fecha_publicacion")
     )
 
-    return resultado[:MAXIMO_ENTRADAS_RSS]
+
+def mezclar_noticias(nuevas, anteriores):
+    noticias_por_id = {noticia["id"]: noticia for noticia in anteriores}
+    claves = {noticia.get("clave", noticia["id"]): noticia["id"] for noticia in anteriores}
+    for noticia in nuevas:
+        clave = noticia["id"]
+        anterior = noticias_por_id.get(noticia.pop("id_anterior"))
+        # Reutilizar el GUID antiguo una vez. Los demás lotes mantienen su propio GUID.
+        if anterior and "clave" not in anterior and anterior.get("url") == noticia["url"]:
+            claves.setdefault(clave, anterior["id"])
+        identificador = claves.setdefault(clave, clave)
+        anterior = noticias_por_id.get(identificador)
+        if anterior and "clave" in anterior:
+            continue
+        noticia["clave"] = clave
+        noticia["id"] = identificador
+        if anterior:
+            # El filtro antiguo ocultaba adjudicaciones publicadas con retraso.
+            fecha_anterior = fecha_rss_noticia(anterior)
+            publicacion = convertir_fecha(anterior.get("fecha_publicacion"))
+            if not publicacion or (publicacion.date() - fecha_anterior.date()).days <= 3:
+                noticia["detectada"] = fecha_anterior.isoformat()
+        noticias_por_id[identificador] = noticia
+
+    return sorted(noticias_por_id.values(), key=fecha_rss_noticia, reverse=True)
 
 
 # ============================================================
 # CREACIÓN DEL RSS
 # ============================================================
 
-def crear_rss(noticias):
-    # Solo mostrar adjudicaciones recientes en Feedly.
-    # El historial completo se conserva por separado para evitar duplicados.
-    hoy = datetime.now(ZONA_HORARIA).date()
-    limite = hoy - timedelta(days=DIAS_MAXIMOS_ANTIGUEDAD)
-    noticias = [
-        noticia for noticia in noticias
-        if (fecha := convertir_fecha(noticia.get("fecha_adjudicacion")))
-        and limite <= fecha.astimezone(ZONA_HORARIA).date() <= hoy
-    ]
+def crear_rss(noticias, ahora):
+    limite = ahora - timedelta(days=DIAS_RSS)
+    noticias = [noticia for noticia in noticias if fecha_rss_noticia(noticia) >= limite]
     print(f"Entradas recientes publicadas en RSS: {len(noticias)}")
     # Esta instrucción añade automáticamente xmlns:atom.
     ET.register_namespace(
@@ -944,8 +868,7 @@ def crear_rss(noticias):
         canal,
         "description",
     ).text = (
-        "Adjudicaciones españolas con fecha "
-        "oficial, adjudicatario e importe igual "
+        "Adjudicaciones españolas por importe igual "
         "o superior a 500.000 euros."
     )
 
@@ -964,7 +887,7 @@ def crear_rss(noticias):
     ET.SubElement(
         canal,
         "ttl",
-    ).text = "300"
+    ).text = "60"
 
     ET.SubElement(
         canal,
@@ -1000,10 +923,7 @@ def crear_rss(noticias):
             },
         ).text = noticia["id"]
 
-        fecha = convertir_fecha(
-            noticia.get("fecha_adjudicacion")
-            or noticia.get("fecha_publicacion")
-        )
+        fecha = fecha_rss_noticia(noticia)
 
         ET.SubElement(
             entrada,
@@ -1054,73 +974,28 @@ def main():
     print("RSS DE ADJUDICACIONES DE ESPAÑA")
     print("========================================")
 
-    entradas = descargar_entradas()
+    ahora = datetime.now(ZONA_HORARIA)
+    limite = ahora - timedelta(days=DIAS_RSS)
+    ultimas_versiones = {}
+    for entrada in descargar_entradas(limite):
+        identificador = entrada.findtext("{http://www.w3.org/2005/Atom}id")
+        fecha = obtener_fecha_publicacion(entrada) or limite
+        clave = identificador or (obtener_url_licitacion(entrada), obtener_expediente(entrada))
+        anterior = ultimas_versiones.get(clave)
+        if anterior is None or fecha > anterior[0]:
+            ultimas_versiones[clave] = (fecha, entrada)
 
-    nuevas = []
-    errores = 0
-
-    for numero, entrada in enumerate(
-        entradas,
-        start=1,
-    ):
-        try:
-            nuevas.extend(
-                convertir_entrada(entrada)
-            )
-
-        except Exception as error:
-            errores += 1
-
-            print(
-                f"Error en entrada {numero}: "
-                f"{type(error).__name__}: {error}"
-            )
-
+    nuevas = [
+        noticia
+        for _, entrada in sorted(ultimas_versiones.values(), key=lambda par: par[0], reverse=True)
+        for noticia in convertir_entrada(entrada, ahora)
+    ]
     anteriores = cargar_historial()
-
-    resultado = mezclar_noticias(
-        nuevas,
-        anteriores,
-    )
-
-    # Conservar la fecha y los datos originales de las entradas ya publicadas.
-    # Evitar reescribir el feed cuando no hay cambios reales.
+    resultado = mezclar_noticias(nuevas, anteriores)
+    crear_rss(resultado, ahora)
     guardar_historial(resultado)
-    crear_rss(resultado)
-
-    print("")
-    print("========================================")
-    print("PROCESO FINALIZADO CORRECTAMENTE")
-    print("========================================")
-    print(
-        f"Entradas descargadas: "
-        f"{len(entradas)}"
-    )
-    print(
-        f"Adjudicaciones nuevas válidas: "
-        f"{len(nuevas)}"
-    )
-    print(
-        f"Entradas guardadas en el RSS: "
-        f"{len(resultado)}"
-    )
-    print(
-        f"Entradas con error: "
-        f"{errores}"
-    )
-    print(
-        f"URL para Feedly: "
-        f"{URL_RSS}"
-    )
-
-    if not nuevas:
-        print("")
-        print(
-            "AVISO: el proceso funcionó, pero no se "
-            "encontraron nuevas adjudicaciones que "
-            "tuvieran fecha oficial, adjudicatario e "
-            "importe mínimo de 500.000 euros."
-        )
+    print(f"Adjudicaciones incorporadas al historial: {len(resultado) - len(anteriores)}")
+    print(f"URL para Feedly: {URL_RSS}")
 
 
 if __name__ == "__main__":
