@@ -4,16 +4,14 @@ on:
   workflow_dispatch:
 
   schedule:
-    # GitHub utiliza UTC. Se inicia cada hora y después
-    # se comprueba la hora real de España.
-    - cron: "11 * * * 1-6"
+    - cron: "11,41 * * * *"
 
 permissions:
   contents: write
 
 concurrency:
   group: actualizar-adjudicaciones-espana
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   actualizar:
@@ -24,48 +22,21 @@ jobs:
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
-      - name: Comprobar horario de España
-        id: horario
-        shell: bash
-        run: |
-          HORA="$(TZ=Europe/Madrid date +%H)"
-          MINUTO="$(TZ=Europe/Madrid date +%M)"
-          DIA="$(TZ=Europe/Madrid date +%u)"
-
-          echo "Hora española: ${HORA}:${MINUTO}"
-          echo "Día de la semana: ${DIA}"
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "ejecutar=si" >> "$GITHUB_OUTPUT"
-          elif [[ "${DIA}" -ge 1 && "${DIA}" -le 6 ]] && \
-               [[ "${HORA}" == "07" || \
-                  "${HORA}" == "12" || \
-                  "${HORA}" == "17" || \
-                  "${HORA}" == "22" ]]; then
-            echo "ejecutar=si" >> "$GITHUB_OUTPUT"
-          else
-            echo "ejecutar=no" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Configurar Python
-        if: steps.horario.outputs.ejecutar == 'si'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
 
       - name: Instalar dependencias
-        if: steps.horario.outputs.ejecutar == 'si'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Crear RSS
-        if: steps.horario.outputs.ejecutar == 'si'
         run: python actualizar_rss.py
 
       - name: Comprobar RSS
-        if: steps.horario.outputs.ejecutar == 'si'
         run: |
           test -s feed.xml
           python - <<'PY'
@@ -83,7 +54,6 @@ jobs:
           PY
 
       - name: Guardar RSS actualizado
-        if: steps.horario.outputs.ejecutar == 'si'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -97,8 +67,3 @@ jobs:
             git commit -m "Actualizar adjudicaciones España con fecha"
             git push
           fi
-
-      - name: Fuera del horario
-        if: steps.horario.outputs.ejecutar != 'si'
-        run: |
-          echo "No corresponde ejecutar en esta hora."
